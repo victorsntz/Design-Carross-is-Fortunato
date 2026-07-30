@@ -6,18 +6,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  # A build roda sempre — serve de verificação mesmo se o deploy falhar
-  # (ex.: GitHub Pages indisponível em repositório privado no plano gratuito).
-  build:
+  build-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,19 +25,9 @@ jobs:
       - run: npm run build
         env:
           GH_PAGES_BASE: /${{ github.event.repository.name }}/
-      - uses: actions/upload-pages-artifact@v3
+      # Publicar na branch gh-pages ativa o GitHub Pages automaticamente
+      # em repositório público — sem precisar mexer nas Settings.
+      - uses: peaceiris/actions-gh-pages@v4
         with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
