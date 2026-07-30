@@ -170,8 +170,10 @@ async function loadVideoEl(src: string): Promise<HTMLVideoElement> {
   video.src = src
   video.muted = true
   video.playsInline = true
+  // 'loadeddata' (e não só 'loadedmetadata') garante que o primeiro frame já
+  // pode ser desenhado — senão a gravação começa com quadros pretos.
   await new Promise<void>((resolve, reject) => {
-    video.addEventListener('loadedmetadata', () => resolve(), { once: true })
+    video.addEventListener('loadeddata', () => resolve(), { once: true })
     video.addEventListener('error', () => reject(new Error('Falha ao ler o vídeo')), {
       once: true,
     })

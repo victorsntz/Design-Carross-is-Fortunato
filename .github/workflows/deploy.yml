@@ -15,13 +15,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A build roda sempre — serve de verificação mesmo se o deploy falhar
+  # (ex.: GitHub Pages indisponível em repositório privado no plano gratuito).
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -41,5 +40,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - id: deployment
         uses: actions/deploy-pages@v4
