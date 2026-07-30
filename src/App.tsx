@@ -731,38 +731,39 @@ export default function App() {
         {/* ============ ESQUERDA: o projeto como um todo ============ */}
         <aside className="panel panel--project">
           <section className="card">
-            <h2 className="card-title">Este carrossel</h2>
+            <h2 className="card-title">Título</h2>
             <label className="field">
-              <span>Título</span>
               <input
                 type="text"
                 value={project.title}
                 onChange={(e) => setProject((p) => ({ ...p, title: e.target.value }))}
+                aria-label="Título do carrossel"
               />
             </label>
-            <div className="control-row">
-              <span className="control-label">Fonte do texto</span>
-              <div className="segmented">
-                <button
-                  type="button"
-                  className={project.font === 'serif' ? 'seg seg--active' : 'seg'}
-                  onClick={() => setProject((p) => ({ ...p, font: 'serif' }))}
-                >
-                  Serifada
-                </button>
-                <button
-                  type="button"
-                  className={project.font === 'sans' ? 'seg seg--active' : 'seg'}
-                  onClick={() => setProject((p) => ({ ...p, font: 'sans' }))}
-                >
-                  Sem serifa
-                </button>
-              </div>
-            </div>
             <button type="button" className="btn btn--primary btn--full" onClick={exportZip}>
               Baixar todos os slides (ZIP)
             </button>
             <p className="hint">PNGs de 1080×1350, prontos pro Instagram.</p>
+          </section>
+
+          <section className="card">
+            <h2 className="card-title">Fonte do texto</h2>
+            <div className="segmented segmented--full">
+              <button
+                type="button"
+                className={project.font === 'serif' ? 'seg seg--active' : 'seg'}
+                onClick={() => setProject((p) => ({ ...p, font: 'serif' }))}
+              >
+                Serifada
+              </button>
+              <button
+                type="button"
+                className={project.font === 'sans' ? 'seg seg--active' : 'seg'}
+                onClick={() => setProject((p) => ({ ...p, font: 'sans' }))}
+              >
+                Sem serifa
+              </button>
+            </div>
           </section>
 
           <section className="card">

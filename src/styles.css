@@ -326,6 +326,14 @@ body {
   overflow: hidden;
 }
 
+.segmented--full {
+  width: 100%;
+}
+
+.segmented--full .seg {
+  flex: 1;
+}
+
 .seg {
   background: var(--card-2);
   border: none;
