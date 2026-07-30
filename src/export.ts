@@ -49,7 +49,7 @@ const CAPTURE_OPTS = { width: SLIDE_W, height: SLIDE_H, scale: 1 }
 
 export async function exportSlidePng(slide: Slide, project: Project): Promise<Blob> {
   const posterized = await posterizeSlide(slide)
-  return withRenderedSlide(posterized, project, 'full', (node) =>
+  return withRenderedSlide(posterized, project, 'export', (node) =>
     domToBlob(node, { ...CAPTURE_OPTS, type: 'image/png' }),
   )
 }
@@ -337,8 +337,21 @@ async function recordPass(
 
   const finished = new Promise<void>((resolve) => {
     let rafId = 0
-    const done = () => {
+    // rAF congela com a aba em segundo plano; o intervalo garante que a
+    // gravação continue andando (mesmo que em poucos quadros por segundo).
+    const intervalId = window.setInterval(drawFrame, 250)
+    // Vídeo travado não pode deixar a exportação pendurada pra sempre.
+    const safetyMs = Number.isFinite(main.duration)
+      ? main.duration * 1000 * 2.5 + 15_000
+      : 180_000
+    const timeoutId = window.setTimeout(() => {
+      failed = true
+      done()
+    }, safetyMs)
+    function done() {
       cancelAnimationFrame(rafId)
+      clearInterval(intervalId)
+      clearTimeout(timeoutId)
       resolve()
     }
     recorder.onerror = () => {

@@ -39,9 +39,9 @@ npm run dev
 ## Publicando no GitHub Pages
 
 O deploy é automático: todo push na branch principal roda o workflow
-`.github/workflows/deploy.yml` e publica o site.
-
-Só precisa ativar uma vez: **Settings → Pages → Source → GitHub Actions**.
+`.github/workflows/deploy.yml` e publica o site. Na primeira execução o
+workflow ativa o GitHub Pages sozinho; se ele falhar nessa etapa, ative
+manualmente em **Settings → Pages → Source → GitHub Actions** e rode de novo.
 
 ## Stack
 

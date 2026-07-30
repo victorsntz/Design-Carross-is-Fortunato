@@ -60,10 +60,12 @@ async function resizeImageToDataUrl(file: Blob): Promise<string> {
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Canvas 2D indisponível')
     ctx.drawImage(img, 0, 0, w, h)
-    // PNG preserva transparência (útil pra capa de livro recortada);
+    // Formatos com transparência viram PNG (útil pra capa de livro recortada);
     // fotos comuns vão de JPEG pra não estourar o armazenamento local.
-    const isPng = file.type === 'image/png'
-    return isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.88)
+    const keepAlpha = ['image/png', 'image/webp', 'image/gif'].includes(file.type)
+    return keepAlpha
+      ? canvas.toDataURL('image/png')
+      : canvas.toDataURL('image/jpeg', 0.88)
   } finally {
     URL.revokeObjectURL(url)
   }

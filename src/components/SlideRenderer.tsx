@@ -35,7 +35,12 @@ export function fontSizeFor(slide: Slide): number {
   return sizes[step]
 }
 
-export type RenderMode = 'full' | 'overlay'
+/**
+ * full: editor (mostra placeholders de espaço vazio)
+ * export: saída final (sem placeholders)
+ * overlay: arte transparente (sem mídias e sem fundo)
+ */
+export type RenderMode = 'full' | 'export' | 'overlay'
 
 interface RendererProps {
   slide: Slide
@@ -43,9 +48,20 @@ interface RendererProps {
   /** Largura de exibição em px; o slide é desenhado em 1080x1350 e escalado. */
   width: number
   mode?: RenderMode
+  /** Miniatura: vídeos ficam parados no primeiro frame. */
+  thumbnail?: boolean
 }
 
-function MediaEl({ media, className }: { media: SlideMedia; className: string }) {
+function MediaEl({
+  media,
+  className,
+  still = false,
+}: {
+  media: SlideMedia
+  className: string
+  /** Miniaturas não tocam o vídeo (só mostram o primeiro frame). */
+  still?: boolean
+}) {
   if (media.kind === 'video') {
     return (
       <video
@@ -53,7 +69,8 @@ function MediaEl({ media, className }: { media: SlideMedia; className: string })
         src={media.src}
         muted
         loop
-        autoPlay
+        autoPlay={!still}
+        preload="auto"
         playsInline
         crossOrigin="anonymous"
       />
@@ -107,16 +124,18 @@ function SplitHalfLayers({
   region,
   fontSize,
   mode,
+  still,
 }: {
   half: SplitHalf
   region: 'top' | 'bottom'
   fontSize: number
   mode: RenderMode
+  still: boolean
 }) {
   return (
     <div className={`sl-split-half sl-split-half--${region}`}>
       {half.media && mode !== 'overlay' && (
-        <MediaEl media={half.media} className="sl-media-abs" />
+        <MediaEl media={half.media} className="sl-media-abs" still={still} />
       )}
       {!half.media && mode === 'full' && (
         <div className="sl-split-placeholder">
@@ -134,16 +153,31 @@ function SplitHalfLayers({
   )
 }
 
-function SplitLayers({ slide, mode }: { slide: SplitSlide; mode: RenderMode }) {
+function SplitLayers({
+  slide,
+  mode,
+  still,
+}: {
+  slide: SplitSlide
+  mode: RenderMode
+  still: boolean
+}) {
   const fontSize = fontSizeFor(slide)
   return (
     <>
-      <SplitHalfLayers half={slide.top} region="top" fontSize={fontSize} mode={mode} />
+      <SplitHalfLayers
+        half={slide.top}
+        region="top"
+        fontSize={fontSize}
+        mode={mode}
+        still={still}
+      />
       <SplitHalfLayers
         half={slide.bottom}
         region="bottom"
         fontSize={fontSize}
         mode={mode}
+        still={still}
       />
     </>
   )
@@ -153,10 +187,12 @@ function ComparisonLayers({
   slide,
   media,
   mode,
+  still,
 }: {
   slide: ComparisonSlide
   media: SlideMedia | null
   mode: RenderMode
+  still: boolean
 }) {
   const fontSize = fontSizeFor(slide)
   const posClass =
@@ -166,12 +202,12 @@ function ComparisonLayers({
   return (
     <>
       {media && mode !== 'overlay' && (
-        <MediaEl media={media} className="sl-media-full" />
+        <MediaEl media={media} className="sl-media-full" still={still} />
       )}
       {!media && mode === 'full' && (
-        <Placeholder label={'Sem mídia ainda.\nUse “Adicionar foto ou vídeo”.'} />
+        <Placeholder label={'Sem foto ainda.\nUse “Adicionar foto ou vídeo”.'} />
       )}
-      <div className={gradClass} />
+      {slide.text.trim() !== '' && <div className={gradClass} />}
       <div className={`sl-comp-text ${posClass}`} style={{ fontSize }}>
         {renderInline(slide.text)}
       </div>
@@ -203,8 +239,16 @@ function BookLayers({
   const fontSize = fontSizeFor(slide)
   return (
     <div className="sl-book" style={{ fontSize }}>
-      {media && mode !== 'overlay' ? (
-        <img className="sl-book-img" src={media.src} alt="" />
+      {media ? (
+        // Na arte transparente a imagem fica invisível mas segura o lugar,
+        // senão o texto sobe e desalinha em relação ao slide completo.
+        <img
+          className={
+            mode === 'overlay' ? 'sl-book-img sl-book-img--ghost' : 'sl-book-img'
+          }
+          src={media.src}
+          alt=""
+        />
       ) : (
         mode === 'full' && (
           <div className="sl-book-img sl-book-img--empty">
@@ -221,17 +265,19 @@ function FinalLayers({
   slide,
   media,
   mode,
+  still,
 }: {
   slide: FinalSlide
   media: SlideMedia | null
   mode: RenderMode
+  still: boolean
 }) {
   const fontSize = fontSizeFor(slide)
   return (
     <>
       {media && mode !== 'overlay' && (
         <div className="sl-final-media">
-          <MediaEl media={media} className="sl-media-fill" />
+          <MediaEl media={media} className="sl-media-fill" still={still} />
         </div>
       )}
       {!media && mode === 'full' && (
@@ -246,7 +292,13 @@ function FinalLayers({
   )
 }
 
-export function SlideRenderer({ slide, project, width, mode = 'full' }: RendererProps) {
+export function SlideRenderer({
+  slide,
+  project,
+  width,
+  mode = 'full',
+  thumbnail = false,
+}: RendererProps) {
   const scale = width / SLIDE_W
   const outerStyle: CSSProperties = {
     width,
@@ -257,10 +309,12 @@ export function SlideRenderer({ slide, project, width, mode = 'full' }: Renderer
   let layers: JSX.Element
   switch (slide.type) {
     case 'split':
-      layers = <SplitLayers slide={slide} mode={mode} />
+      layers = <SplitLayers slide={slide} mode={mode} still={thumbnail} />
       break
     case 'comparison':
-      layers = <ComparisonLayers slide={slide} media={media} mode={mode} />
+      layers = (
+        <ComparisonLayers slide={slide} media={media} mode={mode} still={thumbnail} />
+      )
       break
     case 'development':
       layers = <DevelopmentLayers slide={slide} />
@@ -269,7 +323,7 @@ export function SlideRenderer({ slide, project, width, mode = 'full' }: Renderer
       layers = <BookLayers slide={slide} media={media} mode={mode} />
       break
     case 'final':
-      layers = <FinalLayers slide={slide} media={media} mode={mode} />
+      layers = <FinalLayers slide={slide} media={media} mode={mode} still={thumbnail} />
       break
   }
 

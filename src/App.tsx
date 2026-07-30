@@ -96,13 +96,26 @@ export default function App() {
   )
   const [selectedId, setSelectedId] = useState<string>(() => project.slides[0]?.id ?? '')
   const [busy, setBusy] = useState<string | null>(null)
+  const [draftTooBig, setDraftTooBig] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
   const previewWidth = usePreviewWidth(previewRef)
 
+  const projectRef = useRef(project)
+  projectRef.current = project
+
   useEffect(() => {
-    const t = setTimeout(() => saveProjectToStorage(project), 500)
+    const t = setTimeout(() => setDraftTooBig(!saveProjectToStorage(project)), 500)
     return () => clearTimeout(t)
   }, [project])
+
+  // Fechou a aba antes do rascunho automático rodar? Salva na saída.
+  useEffect(() => {
+    const flush = () => {
+      saveProjectToStorage(projectRef.current)
+    }
+    window.addEventListener('beforeunload', flush)
+    return () => window.removeEventListener('beforeunload', flush)
+  }, [])
 
   const selected =
     project.slides.find((s) => s.id === selectedId) ?? project.slides[0] ?? null
@@ -169,7 +182,17 @@ export default function App() {
     })
   }
 
+  function mediaInSlot(s: Slide, slot: MediaSlot): SlideMedia | null {
+    if (s.type === 'split' && (slot === 'top' || slot === 'bottom')) {
+      return s[slot].media
+    }
+    if (slot === 'media' && 'media' in s) return s.media
+    return null
+  }
+
   function applyMedia(id: string, slot: MediaSlot, media: SlideMedia | null) {
+    const slide = project.slides.find((s) => s.id === id)
+    const old = slide ? mediaInSlot(slide, slot) : null
     updateSlide(id, (s) => {
       if (s.type === 'split' && (slot === 'top' || slot === 'bottom')) {
         return { ...s, [slot]: { ...s[slot], media } } as Slide
@@ -179,6 +202,25 @@ export default function App() {
       }
       return s
     })
+    // Libera o objectURL do vídeo substituído, se nenhum outro slide o usa
+    // (um slide duplicado compartilha o mesmo URL).
+    if (
+      old &&
+      old.kind === 'video' &&
+      old.src.startsWith('blob:') &&
+      old.src !== media?.src
+    ) {
+      let refs = 0
+      for (const s of project.slides) {
+        if (s.type === 'split') {
+          if (s.top.media?.src === old.src) refs++
+          if (s.bottom.media?.src === old.src) refs++
+        } else if ('media' in s && s.media?.src === old.src) {
+          refs++
+        }
+      }
+      if (refs <= 1) URL.revokeObjectURL(old.src)
+    }
   }
 
   async function setSlideMediaFromFile(id: string, slot: MediaSlot, file: File) {
@@ -247,8 +289,21 @@ export default function App() {
 
   const slideFileName = (i: number) => `slide-${String(i + 1).padStart(2, '0')}`
 
+  /** Evita exportar com as assinaturas de exemplo ainda no topo dos slides. */
+  function confirmExampleCaptions(): boolean {
+    const isExample =
+      project.captionLeft.includes('ESCREVA AQUI') ||
+      project.captionRight.includes('REPITA OU VARIE')
+    return (
+      !isExample ||
+      window.confirm(
+        'As assinaturas do topo ainda são o texto de exemplo (veja "Identidade" no painel). Exportar mesmo assim?',
+      )
+    )
+  }
+
   function exportPng() {
-    if (!selected) return
+    if (!selected || !confirmExampleCaptions()) return
     void run('Gerando PNG…', async () => {
       const blob = await exportSlidePng(selected, project)
       downloadBlob(blob, `${slideFileName(selectedIndex)}.png`)
@@ -264,16 +319,27 @@ export default function App() {
   }
 
   function exportVideo() {
-    if (!selected) return
-    void run('Exportando vídeo… 0%', async () => {
+    if (!selected || !confirmExampleCaptions()) return
+    void run('Exportando vídeo… deixe esta aba aberta e visível.', async () => {
       const result = await exportSlideVideo(selected, project, (f) =>
-        setBusy(`Exportando vídeo… ${Math.round(f * 100)}% (tempo real)`),
+        setBusy(
+          `Exportando vídeo… ${Math.round(f * 100)}% (tempo real — deixe esta aba aberta e visível)`,
+        ),
       )
       downloadBlob(result.blob, `${slideFileName(selectedIndex)}.${result.extension}`)
     })
   }
 
   function exportZip() {
+    if (!confirmExampleCaptions()) return
+    if (
+      project.slides.some(slideHasVideo) &&
+      !window.confirm(
+        'Slides com vídeo entram no ZIP como imagem parada (um frame). O vídeo pronto você baixa slide a slide, no botão "Exportar vídeo". Continuar?',
+      )
+    ) {
+      return
+    }
     void run('Gerando todos os PNGs…', async () => {
       const blob = await exportAllPngZip(project, (done, total) =>
         setBusy(`Gerando PNGs… ${done}/${total}`),
@@ -309,16 +375,52 @@ export default function App() {
 
   const selectedHasVideo = selected ? slideHasVideo(selected) : false
 
+  // Avisa quando o texto do slide selecionado estoura os limites do design.
+  const [textOverflow, setTextOverflow] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const root = previewRef.current?.querySelector('.preview-canvas .sl-root')
+      if (!root) {
+        setTextOverflow(false)
+        return
+      }
+      let bad = false
+      root.querySelectorAll('.sl-dev, .sl-book').forEach((el) => {
+        if (el.scrollHeight > el.clientHeight + 2) bad = true
+      })
+      const within = (el: Element, container: Element) => {
+        const r = el.getBoundingClientRect()
+        const c = container.getBoundingClientRect()
+        const tol = Math.max(2, c.height * 0.006)
+        return r.top >= c.top - tol && r.bottom <= c.bottom + tol
+      }
+      root.querySelectorAll('.sl-comp-text, .sl-final-text').forEach((el) => {
+        if (!within(el, root)) bad = true
+      })
+      root.querySelectorAll('.sl-split-text').forEach((el) => {
+        if (el.parentElement && !within(el, el.parentElement)) bad = true
+      })
+      setTextOverflow(bad)
+    }, 150)
+    return () => clearTimeout(t)
+  }, [project, selectedId, previewWidth])
+
   return (
     <div className="app">
       <header className="topbar">
         <div className="topbar-title">
           <h1>Criador de Carrosséis</h1>
           <span className="topbar-sub">comparação → desenvolvimento → final</span>
+          {draftTooBig && (
+            <span className="warn-badge">
+              As fotos não couberam no rascunho automático do navegador — use
+              “Baixar projeto” pra não perder nada.
+            </span>
+          )}
         </div>
         <div className="topbar-actions">
           <button type="button" className="btn" onClick={saveJson}>
-            Salvar projeto
+            Baixar projeto
           </button>
           <FileButton label="Abrir projeto" accept="application/json,.json" onFile={openJson} />
           <button type="button" className="btn" onClick={resetProject}>
@@ -343,7 +445,7 @@ export default function App() {
                 onClick={() => setSelectedId(slide.id)}
               >
                 <span className="thumb-canvas">
-                  <SlideRenderer slide={slide} project={project} width={104} />
+                  <SlideRenderer slide={slide} project={project} width={104} thumbnail />
                 </span>
                 <span className="thumb-label">
                   {i + 1}. {TYPE_LABEL[slide.type]}
@@ -377,6 +479,12 @@ export default function App() {
               <div className="preview-canvas">
                 <SlideRenderer slide={selected} project={project} width={previewWidth} />
               </div>
+              {textOverflow && (
+                <p className="overflow-warning">
+                  O texto está passando do limite do slide. Toque em A− ou encurte o
+                  texto.
+                </p>
+              )}
               <div className="preview-actions">
                 <button type="button" className="btn" onClick={exportPng}>
                   Baixar PNG
@@ -406,7 +514,15 @@ export default function App() {
               {'media' in selected && (
                 <div className="control-row control-row--wrap">
                   <FileButton
-                    label={selected.media ? 'Trocar foto ou vídeo' : 'Adicionar foto ou vídeo'}
+                    label={
+                      selected.type === 'book'
+                        ? selected.media
+                          ? 'Trocar imagem'
+                          : 'Adicionar imagem'
+                        : selected.media
+                          ? 'Trocar foto ou vídeo'
+                          : 'Adicionar foto ou vídeo'
+                    }
                     accept={
                       selected.type === 'book' ? 'image/*' : 'image/*,video/*'
                     }
@@ -433,7 +549,8 @@ export default function App() {
               {selectedHasVideo && (
                 <p className="hint">
                   Vídeos valem só nesta sessão do navegador (não ficam salvos no
-                  projeto). Exporte o vídeo pronto pelo botão abaixo do slide.
+                  projeto). Exporte o vídeo pronto pelo botão abaixo do slide — ele
+                  sai sem áudio (a música você adiciona no Instagram).
                 </p>
               )}
 
@@ -633,7 +750,7 @@ export default function App() {
                   disabled={selectedIndex <= 0}
                   onClick={() => moveSlide(selected.id, -1)}
                 >
-                  ← Mover
+                  Mover pra trás
                 </button>
                 <button
                   type="button"
@@ -641,7 +758,7 @@ export default function App() {
                   disabled={selectedIndex >= project.slides.length - 1}
                   onClick={() => moveSlide(selected.id, 1)}
                 >
-                  Mover →
+                  Mover pra frente
                 </button>
                 <button
                   type="button"

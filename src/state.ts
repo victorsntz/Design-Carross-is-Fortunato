@@ -127,12 +127,15 @@ function stripVolatileMedia(project: Project): Project {
   }
 }
 
-export function saveProjectToStorage(project: Project): void {
+/** Retorna false quando o rascunho não coube no armazenamento do navegador. */
+export function saveProjectToStorage(project: Project): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stripVolatileMedia(project)))
+    return true
   } catch {
     // Quota cheia (fotos grandes demais): o projeto continua em memória;
-    // o usuário ainda pode usar "Salvar projeto" para gerar o arquivo .json.
+    // o app avisa e o usuário pode usar "Baixar projeto" (.json).
+    return false
   }
 }
 
@@ -174,7 +177,10 @@ export function normalizeProject(data: unknown): Project | null {
   if (typeof data !== 'object' || data === null) return null
   const p = data as Partial<Project>
   if (!Array.isArray(p.slides)) return null
+  const str = (v: unknown, fallback: string): string =>
+    typeof v === 'string' ? v : fallback
   const slides: Slide[] = []
+  const seenIds = new Set<string>()
   for (const s of p.slides) {
     if (typeof s !== 'object' || s === null) continue
     const sl = s as Slide
@@ -182,16 +188,39 @@ export function normalizeProject(data: unknown): Project | null {
       continue
     }
     const fresh = makeSlide(sl.type)
-    const merged = { ...fresh, ...sl, id: sl.id || newId() } as Slide
+    const merged = { ...fresh, ...sl } as Slide
+    merged.id =
+      typeof sl.id === 'string' && sl.id !== '' && !seenIds.has(sl.id) ? sl.id : newId()
+    seenIds.add(merged.id)
     if (typeof merged.sizeStep !== 'number' || Number.isNaN(merged.sizeStep)) {
       merged.sizeStep = DEFAULT_STEP
     }
-    if (merged.type === 'split') {
-      const freshSplit = fresh as SplitSlide
-      merged.top = sanitizeHalf(merged.top, freshSplit.top)
-      merged.bottom = sanitizeHalf(merged.bottom, freshSplit.bottom)
-    } else if ('media' in merged) {
-      merged.media = sanitizeMedia(merged.media)
+    // Campos de texto precisam ser string de verdade: um .json editado na mão
+    // (ou corrompido) não pode derrubar o app na hora de renderizar.
+    switch (merged.type) {
+      case 'split': {
+        const freshSplit = fresh as SplitSlide
+        merged.top = sanitizeHalf(merged.top, freshSplit.top)
+        merged.bottom = sanitizeHalf(merged.bottom, freshSplit.bottom)
+        break
+      }
+      case 'comparison':
+        merged.media = sanitizeMedia(merged.media)
+        merged.text = str(merged.text, '')
+        merged.textPosition = merged.textPosition === 'top' ? 'top' : 'bottom'
+        break
+      case 'development':
+        merged.body = str(merged.body, '')
+        merged.emphasis = str(merged.emphasis, '')
+        break
+      case 'book':
+        merged.media = sanitizeMedia(merged.media)
+        merged.body = str(merged.body, '')
+        break
+      case 'final':
+        merged.media = sanitizeMedia(merged.media)
+        merged.text = str(merged.text, '')
+        break
     }
     slides.push(merged)
   }

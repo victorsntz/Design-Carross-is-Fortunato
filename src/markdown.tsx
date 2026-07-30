@@ -5,7 +5,10 @@ import { Fragment } from 'react'
 //   **negrito**   *itálico*   _sublinhado_
 // Quebra de linha simples vira <br/>; linha em branco separa parágrafos.
 
-const TOKEN_RE = /(\*\*[^*]+?\*\*|\*[^*\n]+?\*|_[^_\n]+?_)/g
+// O sublinhado exige borda de palavra pros dois lados: um "_" no meio de
+// @nome_de_usuario não pode virar formatação.
+const TOKEN_RE =
+  /(\*\*[^*]+?\*\*|\*[^*\n]+?\*|(?<![\p{L}\p{N}_])_[^_\n]+?_(?![\p{L}\p{N}_]))/gu
 
 function withBreaks(text: string, keyBase: string): ReactNode[] {
   const lines = text.split('\n')
