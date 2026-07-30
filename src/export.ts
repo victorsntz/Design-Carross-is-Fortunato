@@ -152,8 +152,10 @@ function drawCover(ctx: CanvasRenderingContext2D, d: Drawable): void {
 function pickVideoMimes(): string[] {
   if (typeof MediaRecorder === 'undefined') return []
   const candidates = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
     'video/mp4;codecs=avc1.42E01E',
     'video/mp4',
+    'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp9',
     'video/webm',
   ]
@@ -249,17 +251,50 @@ export async function exportSlideVideo(
     ctx.drawImage(overlay, 0, 0, SLIDE_W, SLIDE_H)
   }
 
+  // Áudio original dos vídeos entra na gravação via AudioContext. Conectar
+  // as fontes só ao destino de gravação (e não aos alto-falantes) mantém a
+  // exportação silenciosa pra quem está usando o app.
+  let audioCtx: AudioContext | null = null
+  let audioTracks: MediaStreamTrack[] = []
+  try {
+    const ctx = new AudioContext()
+    const dest = ctx.createMediaStreamDestination()
+    for (const v of videos) {
+      v.muted = false
+      v.volume = 1
+      ctx.createMediaElementSource(v).connect(dest)
+    }
+    await ctx.resume()
+    audioCtx = ctx
+    audioTracks = dest.stream.getAudioTracks()
+  } catch {
+    // Sem áudio o vídeo ainda sai — só não carrega a trilha original.
+    // (re-muta tudo pra nada tocar em voz alta durante a gravação)
+    for (const v of videos) v.muted = true
+    audioCtx = null
+    audioTracks = []
+  }
+
   // Alguns navegadores dizem suportar MP4 mas gravam um arquivo vazio ou de
   // um frame só (sem encoder H.264 de verdade). Por isso: grava, valida a
   // duração do resultado e cai pro próximo formato se sair quebrado.
   try {
     for (const mime of mimes) {
-      const blob = await recordPass(mime, videos, main, canvas, drawFrame, onProgress)
+      const blob = await recordPass(
+        mime,
+        videos,
+        main,
+        canvas,
+        drawFrame,
+        audioTracks,
+        onProgress,
+      )
       if (blob && blob.size > 0 && (await recordingLooksComplete(blob, main.duration))) {
         return { blob, extension: mime.includes('mp4') ? 'mp4' : 'webm' }
       }
     }
   } finally {
+    void audioCtx?.close().catch(() => {})
     for (const v of videos) {
       v.pause()
       v.removeAttribute('src')
@@ -302,6 +337,7 @@ async function recordPass(
   main: HTMLVideoElement,
   canvas: HTMLCanvasElement,
   drawFrame: () => void,
+  audioTracks: MediaStreamTrack[],
   onProgress: (fraction: number) => void,
 ): Promise<Blob | null> {
   // Volta todos pro início (importante quando o formato anterior falhou)
@@ -317,14 +353,20 @@ async function recordPass(
   drawFrame()
 
   const stream = canvas.captureStream(30)
+  // As trilhas de áudio são compartilhadas entre as tentativas de formato:
+  // entram no stream aqui e NÃO podem ser paradas no fim desta passada.
+  for (const t of audioTracks) stream.addTrack(t)
+  const stopOwnTracks = () => stream.getVideoTracks().forEach((t) => t.stop())
+
   let recorder: MediaRecorder
   try {
     recorder = new MediaRecorder(stream, {
       mimeType: mime,
       videoBitsPerSecond: 12_000_000,
+      audioBitsPerSecond: 128_000,
     })
   } catch {
-    stream.getTracks().forEach((t) => t.stop())
+    stopOwnTracks()
     return null
   }
 
@@ -339,27 +381,55 @@ async function recordPass(
 
   const finished = new Promise<void>((resolve) => {
     let rafId = 0
-    // rAF congela com a aba em segundo plano; o intervalo garante que a
-    // gravação continue andando (mesmo que em poucos quadros por segundo).
-    const intervalId = window.setInterval(drawFrame, 250)
+    let timeoutId = 0
     // Vídeo travado não pode deixar a exportação pendurada pra sempre.
     const safetyMs = Number.isFinite(main.duration)
       ? main.duration * 1000 * 2.5 + 15_000
       : 180_000
-    const timeoutId = window.setTimeout(() => {
-      failed = true
-      done()
-    }, safetyMs)
+    const armSafety = () => {
+      clearTimeout(timeoutId)
+      timeoutId = window.setTimeout(() => {
+        failed = true
+        done()
+      }, safetyMs)
+    }
+    // Aba em segundo plano congela o rAF que desenha os quadros. Em vez de
+    // gravar um vídeo travado, a exportação pausa e retoma quando a pessoa
+    // volta pra aba.
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (recorder.state === 'recording') recorder.pause()
+        for (const v of videos) v.pause()
+        clearTimeout(timeoutId)
+      } else {
+        if (recorder.state === 'paused') recorder.resume()
+        armSafety()
+        void Promise.all(videos.map((v) => v.play())).catch(() => {
+          failed = true
+          done()
+        })
+      }
+    }
     function done() {
       cancelAnimationFrame(rafId)
-      clearInterval(intervalId)
       clearTimeout(timeoutId)
+      document.removeEventListener('visibilitychange', onVisibility)
       resolve()
     }
     recorder.onerror = () => {
       failed = true
       done()
     }
+    // Arquivo corrompido pode falhar no meio da reprodução sem nunca
+    // disparar 'ended' — trata como falha em vez de pendurar a exportação.
+    main.addEventListener(
+      'error',
+      () => {
+        failed = true
+        done()
+      },
+      { once: true },
+    )
     const tick = () => {
       drawFrame()
       if (Number.isFinite(main.duration) && main.duration > 0) {
@@ -372,6 +442,8 @@ async function recordPass(
       rafId = requestAnimationFrame(tick)
     }
     main.addEventListener('ended', done, { once: true })
+    document.addEventListener('visibilitychange', onVisibility)
+    armSafety()
     rafId = requestAnimationFrame(tick)
   })
 
@@ -380,7 +452,7 @@ async function recordPass(
     await Promise.all(videos.map((v) => v.play()))
   } catch {
     recorder.stop()
-    stream.getTracks().forEach((t) => t.stop())
+    stopOwnTracks()
     return null
   }
   await finished
@@ -389,7 +461,7 @@ async function recordPass(
   drawFrame()
   if (recorder.state !== 'inactive') recorder.stop()
   await stopped
-  stream.getTracks().forEach((t) => t.stop())
+  stopOwnTracks()
 
   if (failed) return null
   return new Blob(chunks, { type: mime })

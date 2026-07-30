@@ -320,10 +320,10 @@ export default function App() {
 
   function exportVideo() {
     if (!selected || !confirmExampleCaptions()) return
-    void run('Exportando vídeo… deixe esta aba aberta e visível.', async () => {
+    void run('Exportando vídeo…', async () => {
       const result = await exportSlideVideo(selected, project, (f) =>
         setBusy(
-          `Exportando vídeo… ${Math.round(f * 100)}% (tempo real — deixe esta aba aberta e visível)`,
+          `Exportando vídeo… ${Math.round(f * 100)}% (tempo real — se trocar de aba, a exportação pausa e continua quando você voltar)`,
         ),
       )
       downloadBlob(result.blob, `${slideFileName(selectedIndex)}.${result.extension}`)
@@ -550,7 +550,7 @@ export default function App() {
                 <p className="hint">
                   Vídeos valem só nesta sessão do navegador (não ficam salvos no
                   projeto). Exporte o vídeo pronto pelo botão abaixo do slide — ele
-                  sai sem áudio (a música você adiciona no Instagram).
+                  sai com o áudio original do arquivo.
                 </p>
               )}
 

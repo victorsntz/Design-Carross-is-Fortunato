@@ -22,7 +22,8 @@ Nada de arrastar elementos: a diagramação nunca quebra.
   vídeo pronto com a arte (textos, borda, granulado) por cima — sem precisar de Figma + editor.
 - **Exportações**:
   - PNG 1080×1350 por slide, ou todos de uma vez em ZIP
-  - Vídeo do slide (MP4 no Chrome; WebM em navegadores sem suporte a MP4)
+  - Vídeo do slide com o áudio original (MP4 no Chrome; WebM em navegadores sem
+    suporte a MP4); trocar de aba pausa a gravação e ela retoma quando você volta
   - Arte transparente (PNG sem a mídia) pra compor sobre vídeo em qualquer editor
 - **Mini-formatação nos textos**: `**negrito**`, `*itálico*`, `_sublinhado_`.
   Linha em branco separa parágrafos.
