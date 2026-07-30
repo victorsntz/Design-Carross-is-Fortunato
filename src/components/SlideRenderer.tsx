@@ -335,12 +335,17 @@ export function SlideRenderer({
       break
   }
 
+  const rootClass = [
+    'sl-root',
+    `sl-font--${project.font}`,
+    mode === 'overlay' ? 'sl-root--overlay' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
     <div className="sl-scale-outer" style={outerStyle}>
-      <div
-        className={mode === 'overlay' ? 'sl-root sl-root--overlay' : 'sl-root'}
-        style={{ transform: `scale(${scale})` }}
-      >
+      <div className={rootClass} style={{ transform: `scale(${scale})` }}>
         {layers}
         <Chrome project={project} />
       </div>

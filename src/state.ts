@@ -3,6 +3,7 @@ import type {
   ComparisonSlide,
   DevelopmentSlide,
   FinalSlide,
+  FontStyle,
   Project,
   Slide,
   SlideMedia,
@@ -151,6 +152,7 @@ export function defaultProject(): Project {
 
   return {
     title: 'Meu primeiro carrossel',
+    font: 'serif',
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
     slides: [...splits, dev1, split5, dev2, split6, dev3, fin],
@@ -161,9 +163,10 @@ export function defaultProject(): Project {
  * Estrutura do método com os textos em branco: é o que "+ Novo carrossel"
  * cria. O baralho-tutorial (defaultProject) aparece só na primeira visita.
  */
-export function blankProject(captions?: {
+export function blankProject(base?: {
   captionLeft: string
   captionRight: string
+  font: FontStyle
 }): Project {
   const structure: SlideType[] = [
     'split',
@@ -202,8 +205,9 @@ export function blankProject(captions?: {
   })
   return {
     title: 'Novo carrossel',
-    captionLeft: captions?.captionLeft ?? '',
-    captionRight: captions?.captionRight ?? '',
+    font: base?.font ?? 'serif',
+    captionLeft: base?.captionLeft ?? '',
+    captionRight: base?.captionRight ?? '',
     slides,
   }
 }
@@ -538,6 +542,7 @@ export function normalizeProject(data: unknown): Project | null {
       typeof p.title === 'string' && p.title.trim() !== ''
         ? p.title
         : 'Carrossel sem título',
+    font: p.font === 'sans' ? 'sans' : 'serif',
     captionLeft: typeof p.captionLeft === 'string' ? p.captionLeft : '',
     captionRight: typeof p.captionRight === 'string' ? p.captionRight : '',
     slides,

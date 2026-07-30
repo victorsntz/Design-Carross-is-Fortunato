@@ -67,9 +67,14 @@ export type Slide =
   | BookSlide
   | FinalSlide
 
+/** Fonte dos textos dos slides: serifada (STIX) ou sem serifa (Helvetica). */
+export type FontStyle = 'serif' | 'sans'
+
 export interface Project {
   /** Nome do carrossel, mostrado na lista "Meus carrosséis". */
   title: string
+  /** Vale pra todos os textos de todos os slides. */
+  font: FontStyle
   /** Assinatura pequena no topo esquerdo de todos os slides. */
   captionLeft: string
   /** Assinatura pequena no topo direito de todos os slides. */

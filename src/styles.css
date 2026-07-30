@@ -644,6 +644,11 @@ body {
   background: transparent;
 }
 
+/* escolha de fonte do carrossel: serifada (padrão) ou sem serifa */
+.sl-font--sans {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
 /* assinaturas do topo (sans-serif, contraste com a serifa do texto) */
 .sl-cap {
   position: absolute;

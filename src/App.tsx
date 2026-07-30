@@ -37,9 +37,9 @@ import {
 const TYPE_LABEL: Record<SlideType, string> = {
   split: 'Tela partida',
   comparison: 'Foto de fundo',
-  development: 'Desenvolvimento',
+  development: 'Desenvolvimento 1',
   book: 'Livro / Oferta',
-  final: 'CTA',
+  final: 'Desenvolvimento 2',
 }
 
 /** Cor de identificação de cada tipo, usada no menu, no selo e nas miniaturas. */
@@ -55,9 +55,12 @@ const TYPE_COLOR: Record<SlideType, string> = {
 // renderizando em carrosséis já salvos, mas saíram do menu.
 const ADD_OPTIONS: { type: SlideType; label: string; hint: string }[] = [
   { type: 'split', label: 'Tela partida', hint: 'o par de comparação' },
-  { type: 'development', label: 'Desenvolvimento', hint: 'foto de fundo + texto' },
-  { type: 'final', label: 'CTA', hint: 'texto à esquerda, foto à direita' },
+  { type: 'development', label: 'Desenvolvimento 1', hint: 'foto de fundo + texto' },
+  { type: 'final', label: 'Desenvolvimento 2', hint: 'texto à esquerda, foto à direita' },
 ]
+
+/** Cores das metades da tela partida no painel de ajustes. */
+const HALF_COLOR = { top: '#e0a86e', bottom: '#7fb5e0' } as const
 
 /** Desenho do layout de cada tipo, pro botão de adicionar ser visual. */
 function TypeIcon({ type }: { type: SlideType }) {
@@ -297,14 +300,11 @@ export default function App() {
   function addSlide(type: SlideType) {
     const slide = makeSlide(type)
     setProject((p) => {
+      // O novo slide entra logo depois do que está sendo editado:
+      // editando o 3, o novo vira o 4.
       const slides = [...p.slides]
-      // Slide final costuma fechar o carrossel: novos slides entram antes dele.
-      const last = slides[slides.length - 1]
-      if (last && last.type === 'final' && type !== 'final') {
-        slides.splice(slides.length - 1, 0, slide)
-      } else {
-        slides.push(slide)
-      }
+      const at = slides.findIndex((s) => s.id === selectedId)
+      slides.splice(at >= 0 ? at + 1 : slides.length, 0, slide)
       return { ...p, slides }
     })
     setSelectedId(slide.id)
@@ -656,6 +656,7 @@ export default function App() {
     const fresh = blankProject({
       captionLeft: projectRef.current.captionLeft,
       captionRight: projectRef.current.captionRight,
+      font: projectRef.current.font,
     })
     setProjectId(newId())
     setProject(fresh)
@@ -690,6 +691,7 @@ export default function App() {
       const fresh = blankProject({
         captionLeft: projectRef.current.captionLeft,
         captionRight: projectRef.current.captionRight,
+        font: projectRef.current.font,
       })
       setProjectId(newId())
       setProject(fresh)
@@ -738,6 +740,25 @@ export default function App() {
                 onChange={(e) => setProject((p) => ({ ...p, title: e.target.value }))}
               />
             </label>
+            <div className="control-row">
+              <span className="control-label">Fonte do texto</span>
+              <div className="segmented">
+                <button
+                  type="button"
+                  className={project.font === 'serif' ? 'seg seg--active' : 'seg'}
+                  onClick={() => setProject((p) => ({ ...p, font: 'serif' }))}
+                >
+                  Serifada
+                </button>
+                <button
+                  type="button"
+                  className={project.font === 'sans' ? 'seg seg--active' : 'seg'}
+                  onClick={() => setProject((p) => ({ ...p, font: 'sans' }))}
+                >
+                  Sem serifa
+                </button>
+              </div>
+            </div>
             <button type="button" className="btn btn--primary btn--full" onClick={exportZip}>
               Baixar todos os slides (ZIP)
             </button>
@@ -934,8 +955,12 @@ export default function App() {
                 (['top', 'bottom'] as const).map((slot) => {
                   const half = (selected as SplitSlide)[slot]
                   return (
-                    <section key={slot} className="card">
-                      <h2 className="card-title">
+                    <section
+                      key={slot}
+                      className="card"
+                      style={{ borderLeft: `3px solid ${HALF_COLOR[slot]}` }}
+                    >
+                      <h2 className="card-title" style={{ color: HALF_COLOR[slot] }}>
                         {slot === 'top' ? 'Metade de cima' : 'Metade de baixo'}
                       </h2>
                       <div className="control-row control-row--wrap">
@@ -1201,7 +1226,7 @@ export default function App() {
                     className="thumb-dot"
                     style={{ background: TYPE_COLOR[slide.type] }}
                   />
-                  {i + 1} · {TYPE_LABEL[slide.type]}
+                  Slide {i + 1}
                 </span>
               </button>
               {active && (
