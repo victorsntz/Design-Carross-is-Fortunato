@@ -699,7 +699,7 @@ export default function App() {
                     />
                   </label>
                   <label className="field">
-                    <span>Frase de fechamento (negrito, centralizada)</span>
+                    <span>Frase de fechamento (negrito)</span>
                     <textarea
                       rows={2}
                       value={(selected as DevelopmentSlide).emphasis}
@@ -811,6 +811,29 @@ export default function App() {
 
           <section className="panel-section">
             <span className="panel-heading">Identidade (todos os slides)</span>
+            <div className="control-row">
+              <span className="control-label">Alinhamento do texto</span>
+              <div className="segmented">
+                <button
+                  type="button"
+                  className={project.align === 'left' ? 'seg seg--active' : 'seg'}
+                  onClick={() => setProject((p) => ({ ...p, align: 'left' }))}
+                >
+                  Esquerda
+                </button>
+                <button
+                  type="button"
+                  className={project.align === 'center' ? 'seg seg--active' : 'seg'}
+                  onClick={() => setProject((p) => ({ ...p, align: 'center' }))}
+                >
+                  Centro
+                </button>
+              </div>
+            </div>
+            <p className="hint">
+              Vale pro carrossel inteiro: ou tudo à esquerda, ou tudo no centro —
+              nunca misturado.
+            </p>
             <label className="field">
               <span>Assinatura do topo — esquerda</span>
               <textarea

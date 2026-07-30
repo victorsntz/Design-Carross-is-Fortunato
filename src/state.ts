@@ -109,7 +109,7 @@ export function defaultProject(): Project {
   const dev = makeSlide('development') as DevelopmentSlide
   dev.body =
     'Aqui entra o desenvolvimento: você conecta os dados que acabou de mostrar e explica o que eles significam.\n\nEscreva em parágrafos curtos. Linha em branco separa parágrafos. Use **negrito**, *itálico* e _sublinhado_ quando precisar.'
-  dev.emphasis = 'A conclusão forte fecha em negrito, centralizada.'
+  dev.emphasis = 'A conclusão forte fecha em negrito.'
 
   const book = makeSlide('book') as BookSlide
 
@@ -129,6 +129,7 @@ export function defaultProject(): Project {
   return {
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
+    align: 'center',
     slides: [...splits, dev, book, photo1, split5, photo2, fin],
   }
 }
@@ -290,6 +291,7 @@ export function normalizeProject(data: unknown): Project | null {
   return {
     captionLeft: typeof p.captionLeft === 'string' ? p.captionLeft : '',
     captionRight: typeof p.captionRight === 'string' ? p.captionRight : '',
+    align: p.align === 'left' ? 'left' : 'center',
     slides,
   }
 }

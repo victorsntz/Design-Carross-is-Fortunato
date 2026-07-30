@@ -66,10 +66,15 @@ export type Slide =
   | BookSlide
   | FinalSlide
 
+/** Alinhamento único do carrossel inteiro: tudo à esquerda ou tudo no centro. */
+export type TextAlign = 'left' | 'center'
+
 export interface Project {
   /** Assinatura pequena no topo esquerdo de todos os slides. */
   captionLeft: string
   /** Assinatura pequena no topo direito de todos os slides. */
   captionRight: string
+  /** Vale pra todos os textos de todos os slides — nunca misturado. */
+  align: TextAlign
   slides: Slide[]
 }
