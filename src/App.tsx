@@ -421,11 +421,20 @@ export default function App() {
         const tol = Math.max(2, c.height * 0.006)
         return r.top >= c.top - tol && r.bottom <= c.bottom + tol
       }
-      root.querySelectorAll('.sl-comp-text, .sl-final-text').forEach((el) => {
+      // Sobre foto, o texto precisa deixar a imagem aparecer: mais da metade
+      // da altura coberta já é demais.
+      const coversTooMuch = (el: Element, container: Element) =>
+        el.getBoundingClientRect().height >
+        container.getBoundingClientRect().height * 0.5
+      root.querySelectorAll('.sl-comp-text').forEach((el) => {
+        if (!within(el, root) || coversTooMuch(el, root)) bad = true
+      })
+      root.querySelectorAll('.sl-final-text').forEach((el) => {
         if (!within(el, root)) bad = true
       })
       root.querySelectorAll('.sl-split-text').forEach((el) => {
-        if (el.parentElement && !within(el, el.parentElement)) bad = true
+        const half = el.parentElement
+        if (half && (!within(el, half) || coversTooMuch(el, half))) bad = true
       })
       setTextOverflow(bad)
     }, 150)
@@ -508,8 +517,8 @@ export default function App() {
               </div>
               {textOverflow && (
                 <p className="overflow-warning">
-                  O texto está passando do limite do slide. Toque em A− ou encurte o
-                  texto.
+                  O texto está passando do limite do slide ou cobrindo foto demais.
+                  Toque em A− ou encurte o texto.
                 </p>
               )}
               <div className="preview-actions">

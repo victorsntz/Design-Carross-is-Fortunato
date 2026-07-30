@@ -143,7 +143,7 @@ export function defaultProject(): Project {
   return {
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
-    align: 'center',
+    align: 'left',
     slides: [...splits, dev, book, photo1, split5, photo2, fin],
   }
 }
@@ -305,7 +305,7 @@ export function normalizeProject(data: unknown): Project | null {
   return {
     captionLeft: typeof p.captionLeft === 'string' ? p.captionLeft : '',
     captionRight: typeof p.captionRight === 'string' ? p.captionRight : '',
-    align: p.align === 'left' ? 'left' : 'center',
+    align: p.align === 'center' ? 'center' : 'left',
     slides,
   }
 }
