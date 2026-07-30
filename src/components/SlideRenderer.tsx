@@ -94,17 +94,14 @@ function Captions({ project }: { project: Project }) {
 
 function Chrome({
   project,
-  mode,
   frame = true,
 }: {
   project: Project
-  mode: RenderMode
   /** Tela partida desenha uma moldura por metade, então dispensa a geral. */
   frame?: boolean
 }) {
   return (
     <>
-      <div className={mode === 'overlay' ? 'sl-grain sl-grain--flat' : 'sl-grain'} />
       {frame && <div className="sl-frame" />}
       <Captions project={project} />
     </>
@@ -334,7 +331,7 @@ export function SlideRenderer({
         style={{ transform: `scale(${scale})` }}
       >
         {layers}
-        <Chrome project={project} mode={mode} frame={slide.type !== 'split'} />
+        <Chrome project={project} frame={slide.type !== 'split'} />
       </div>
     </div>
   )

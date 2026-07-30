@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@fontsource/tinos": "^5.1.0",
+    "@fontsource/stix-two-text": "^5.3.0",
     "jszip": "^3.10.1",
     "modern-screenshot": "^4.4.39",
     "react": "^18.3.1",

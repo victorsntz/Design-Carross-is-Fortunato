@@ -91,12 +91,13 @@ function usePreviewWidth(ref: React.RefObject<HTMLElement>): number {
 }
 
 export default function App() {
-  const [project, setProject] = useState<Project>(
-    () => loadProjectFromStorage() ?? defaultProject(),
-  )
+  const [project, setProject] = useState<Project>(defaultProject)
   const [selectedId, setSelectedId] = useState<string>(() => project.slides[0]?.id ?? '')
   const [busy, setBusy] = useState<string | null>(null)
-  const [draftTooBig, setDraftTooBig] = useState(false)
+  const [draftFailed, setDraftFailed] = useState(false)
+  // Só grava rascunho depois de tentar restaurar o anterior, senão o estado
+  // inicial padrão atropela o que estava salvo.
+  const [hydrated, setHydrated] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
   const previewWidth = usePreviewWidth(previewRef)
 
@@ -104,18 +105,44 @@ export default function App() {
   projectRef.current = project
 
   useEffect(() => {
-    const t = setTimeout(() => setDraftTooBig(!saveProjectToStorage(project)), 500)
-    return () => clearTimeout(t)
-  }, [project])
+    let cancelled = false
+    void loadProjectFromStorage().then((saved) => {
+      if (cancelled) return
+      if (saved) {
+        setProject(saved)
+        setSelectedId(saved.slides[0]?.id ?? '')
+      }
+      setHydrated(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
-  // Fechou a aba antes do rascunho automático rodar? Salva na saída.
   useEffect(() => {
+    if (!hydrated) return
+    const t = setTimeout(() => {
+      void saveProjectToStorage(project).then((ok) => setDraftFailed(!ok))
+    }, 500)
+    return () => clearTimeout(t)
+  }, [project, hydrated])
+
+  // Saiu da aba (ou fechou) antes do rascunho automático rodar? Salva já.
+  useEffect(() => {
+    if (!hydrated) return
     const flush = () => {
-      saveProjectToStorage(projectRef.current)
+      void saveProjectToStorage(projectRef.current)
+    }
+    const onVisibility = () => {
+      if (document.hidden) flush()
     }
     window.addEventListener('beforeunload', flush)
-    return () => window.removeEventListener('beforeunload', flush)
-  }, [])
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('beforeunload', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [hydrated])
 
   const selected =
     project.slides.find((s) => s.id === selectedId) ?? project.slides[0] ?? null
@@ -411,9 +438,9 @@ export default function App() {
         <div className="topbar-title">
           <h1>Criador de Carrosséis</h1>
           <span className="topbar-sub">comparação → desenvolvimento → final</span>
-          {draftTooBig && (
+          {draftFailed && (
             <span className="warn-badge">
-              As fotos não couberam no rascunho automático do navegador — use
+              Não consegui salvar o rascunho automático no navegador — use
               “Baixar projeto” pra não perder nada.
             </span>
           )}

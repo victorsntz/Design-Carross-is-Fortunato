@@ -12,7 +12,23 @@ import type {
 } from './types'
 import { DEFAULT_STEP } from './components/SlideRenderer'
 
-const STORAGE_KEY = 'criador-carrosseis-v1'
+// Rascunho automático fica no IndexedDB: fotos de 10-13 slides estouram os
+// ~5MB do localStorage, e perder o rascunho no reload é inaceitável.
+const LEGACY_STORAGE_KEY = 'criador-carrosseis-v1'
+const DB_NAME = 'criador-carrosseis'
+const DB_STORE = 'projetos'
+const DB_KEY = 'atual'
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1)
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(DB_STORE)
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
 
 export function newId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -76,32 +92,44 @@ export function makeSlide(type: SlideType): Slide {
 }
 
 export function defaultProject(): Project {
-  const splits = [
-    ['Lado A: comece com o dado mais forte.', 'Lado B: o contraste vem logo abaixo.'],
-    ['Mais um dado do Lado A.', 'E o contraste de novo, sempre em par.'],
-    ['O padrão se repete no terceiro par.', '*A repetição constrói o argumento.*'],
-    ['Feche a sequência com o dado mais duro.', 'E o contraste que ninguém esquece.'],
-  ].map(([topText, bottomText]) => {
+  const split = (topText: string, bottomText: string): SplitSlide => {
     const s = makeSlide('split') as SplitSlide
     s.top.text = topText
     s.bottom.text = bottomText
     return s
-  })
+  }
+
+  const splits = [
+    split('Lado A: comece com o dado mais forte.', 'Lado B: o contraste vem logo abaixo.'),
+    split('Mais um dado do Lado A.', 'E o contraste de novo, sempre em par.'),
+    split('O padrão se repete no terceiro par.', '*A repetição constrói o argumento.*'),
+    split('Feche a sequência com o dado mais duro.', 'E o contraste que ninguém esquece.'),
+  ]
 
   const dev = makeSlide('development') as DevelopmentSlide
   dev.body =
     'Aqui entra o desenvolvimento: você conecta os dados que acabou de mostrar e explica o que eles significam.\n\nEscreva em parágrafos curtos. Linha em branco separa parágrafos. Use **negrito**, *itálico* e _sublinhado_ quando precisar.'
   dev.emphasis = 'A conclusão forte fecha em negrito, centralizada.'
 
-  const photo = makeSlide('comparison') as ComparisonSlide
-  photo.text = 'Depois do desenvolvimento, uma foto inteira com uma frase de impacto.'
+  const book = makeSlide('book') as BookSlide
+
+  const photo1 = makeSlide('comparison') as ComparisonSlide
+  photo1.text = 'Depois do desenvolvimento, uma foto inteira com uma frase de impacto.'
+
+  const split5 = split(
+    'Dá pra voltar pra comparação no meio do carrossel.',
+    'Alternando com as fotos inteiras, como no formato.',
+  )
+
+  const photo2 = makeSlide('comparison') as ComparisonSlide
+  photo2.text = 'Mais uma foto de fundo antes do convite final.'
 
   const fin = makeSlide('final') as FinalSlide
 
   return {
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
-    slides: [...splits, dev, photo, fin],
+    slides: [...splits, dev, book, photo1, split5, photo2, fin],
   }
 }
 
@@ -127,23 +155,57 @@ function stripVolatileMedia(project: Project): Project {
   }
 }
 
-/** Retorna false quando o rascunho não coube no armazenamento do navegador. */
-export function saveProjectToStorage(project: Project): boolean {
+/** Retorna false quando o rascunho não pôde ser salvo no navegador. */
+export async function saveProjectToStorage(project: Project): Promise<boolean> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stripVolatileMedia(project)))
+    // structuredClone via JSON garante objeto puro pro IndexedDB
+    const data = JSON.parse(JSON.stringify(stripVolatileMedia(project)))
+    const db = await openDb()
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readwrite')
+        tx.objectStore(DB_STORE).put(data, DB_KEY)
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error)
+        tx.onabort = () => reject(tx.error)
+      })
+    } finally {
+      db.close()
+    }
     return true
   } catch {
-    // Quota cheia (fotos grandes demais): o projeto continua em memória;
-    // o app avisa e o usuário pode usar "Baixar projeto" (.json).
+    // O projeto continua em memória; o app avisa e o usuário pode usar
+    // "Baixar projeto" (.json).
     return false
   }
 }
 
-export function loadProjectFromStorage(): Project | null {
+export async function loadProjectFromStorage(): Promise<Project | null> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    return normalizeProject(JSON.parse(raw))
+    const db = await openDb()
+    let data: unknown
+    try {
+      data = await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readonly')
+        const req = tx.objectStore(DB_STORE).get(DB_KEY)
+        req.onsuccess = () => resolve(req.result)
+        req.onerror = () => reject(req.error)
+      })
+    } finally {
+      db.close()
+    }
+    if (data) return normalizeProject(data)
+    // Migração: rascunho antigo salvo no localStorage
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+    if (legacy) {
+      const project = normalizeProject(JSON.parse(legacy))
+      if (project) {
+        void saveProjectToStorage(project)
+        localStorage.removeItem(LEGACY_STORAGE_KEY)
+        return project
+      }
+    }
+    return null
   } catch {
     return null
   }
