@@ -37,11 +37,12 @@ export interface ComparisonSlide extends BaseSlide {
   textPosition: 'top' | 'bottom'
 }
 
-/** Slide de desenvolvimento: fundo preto + parágrafos de texto. */
+/** Desenvolvimento: foto/vídeo de fundo + sombra + parágrafos à esquerda. */
 export interface DevelopmentSlide extends BaseSlide {
   type: 'development'
+  media: SlideMedia | null
   body: string
-  /** Frase final em negrito, centralizada (opcional). */
+  /** Frase final em negrito (opcional). */
   emphasis: string
 }
 

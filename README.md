@@ -6,13 +6,14 @@ Nada de arrastar elementos: a diagramação nunca quebra.
 
 ## O que dá pra fazer
 
-- **5 tipos de slide** com o design fixo do formato:
+- **3 tipos de slide** com o design fixo do formato, cada um com sua cor no menu:
   - **Tela partida** — duas fotos e dois textos no mesmo slide (o par de comparação),
-    cada metade com sua moldura tracejada
-  - **Foto de fundo** — foto ou vídeo inteiro + frase curta com sombra de contraste
-  - **Desenvolvimento** — fundo preto + parágrafos + frase de fechamento em negrito
-  - **Livro / Oferta** — imagem do produto centralizada + texto
-  - **Final (CTA)** — texto "Me segue se…" à esquerda + foto à direita
+    frases centralizadas na parte de baixo de cada metade
+  - **Desenvolvimento** — foto ou vídeo de fundo + sombra forte + parágrafos
+    alinhados à esquerda, ancorados embaixo
+  - **CTA** — texto "Me segue se…" à esquerda + foto à direita
+  - (tipos antigos — foto de fundo e livro/oferta — continuam abrindo em
+    carrosséis já salvos)
 - **Tudo por botões**: trocar mídia, aumentar/diminuir texto (5 tamanhos), posição do texto,
   reordenar, duplicar e excluir slides.
 - **Colar imagem sem baixar**: copiou uma imagem (no Google, por exemplo)? O botão

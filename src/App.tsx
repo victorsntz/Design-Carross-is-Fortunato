@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   BookSlide,
   ComparisonSlide,
@@ -39,16 +39,60 @@ const TYPE_LABEL: Record<SlideType, string> = {
   comparison: 'Foto de fundo',
   development: 'Desenvolvimento',
   book: 'Livro / Oferta',
-  final: 'Final (CTA)',
+  final: 'CTA',
 }
 
+/** Cor de identificação de cada tipo, usada no menu, no selo e nas miniaturas. */
+const TYPE_COLOR: Record<SlideType, string> = {
+  split: '#e8c46a',
+  comparison: '#c9b491',
+  development: '#7fb5e0',
+  book: '#c79ad2',
+  final: '#8fd49a',
+}
+
+// Os três tipos do formato. Os antigos (foto de fundo, livro) continuam
+// renderizando em carrosséis já salvos, mas saíram do menu.
 const ADD_OPTIONS: { type: SlideType; label: string; hint: string }[] = [
   { type: 'split', label: 'Tela partida', hint: 'o par de comparação' },
-  { type: 'comparison', label: 'Foto de fundo', hint: 'foto inteira + frase' },
-  { type: 'development', label: 'Desenvolvimento', hint: 'o texto denso' },
-  { type: 'book', label: 'Livro / Oferta', hint: 'seu produto' },
-  { type: 'final', label: 'Final (CTA)', hint: 'o convite "me segue"' },
+  { type: 'development', label: 'Desenvolvimento', hint: 'foto de fundo + texto' },
+  { type: 'final', label: 'CTA', hint: 'texto à esquerda, foto à direita' },
 ]
+
+/** Desenho do layout de cada tipo, pro botão de adicionar ser visual. */
+function TypeIcon({ type }: { type: SlideType }) {
+  const c = TYPE_COLOR[type]
+  if (type === 'split') {
+    return (
+      <svg className="type-icon" viewBox="0 0 26 32" aria-hidden>
+        <rect x="1" y="1" width="24" height="14" rx="2" fill="none" stroke={c} strokeWidth="1.5" />
+        <rect x="1" y="17" width="24" height="14" rx="2" fill="none" stroke={c} strokeWidth="1.5" />
+        <line x1="6" y1="11.5" x2="20" y2="11.5" stroke={c} strokeWidth="1.5" />
+        <line x1="6" y1="27.5" x2="20" y2="27.5" stroke={c} strokeWidth="1.5" />
+      </svg>
+    )
+  }
+  if (type === 'development') {
+    return (
+      <svg className="type-icon" viewBox="0 0 26 32" aria-hidden>
+        <rect x="1" y="1" width="24" height="30" rx="2" fill={c} opacity="0.22" />
+        <rect x="1" y="1" width="24" height="30" rx="2" fill="none" stroke={c} strokeWidth="1.5" />
+        <line x1="11" y1="19" x2="22" y2="19" stroke={c} strokeWidth="1.5" />
+        <line x1="11" y1="23" x2="22" y2="23" stroke={c} strokeWidth="1.5" />
+        <line x1="11" y1="27" x2="18" y2="27" stroke={c} strokeWidth="1.5" />
+      </svg>
+    )
+  }
+  return (
+    <svg className="type-icon" viewBox="0 0 26 32" aria-hidden>
+      <rect x="1" y="1" width="24" height="30" rx="2" fill="none" stroke={c} strokeWidth="1.5" />
+      <rect x="14" y="2.5" width="10" height="27" fill={c} opacity="0.45" />
+      <line x1="4" y1="13" x2="11" y2="13" stroke={c} strokeWidth="1.5" />
+      <line x1="4" y1="17" x2="11" y2="17" stroke={c} strokeWidth="1.5" />
+      <line x1="4" y1="21" x2="9" y2="21" stroke={c} strokeWidth="1.5" />
+    </svg>
+  )
+}
 
 /** Onde uma mídia entra num slide: no espaço único ou numa das metades. */
 type MediaSlot = 'media' | 'top' | 'bottom'
@@ -105,24 +149,30 @@ function FileButton({
   )
 }
 
-function usePreviewWidth(ref: React.RefObject<HTMLElement>): number {
+/**
+ * Ref de callback: re-observa sempre que o contêiner do slide monta/desmonta
+ * (ele some atrás da tela de carregamento e quando não há slide).
+ */
+function usePreviewWidth(): [number, (el: HTMLDivElement | null) => void] {
   const [w, setW] = useState(320)
-  useEffect(() => {
-    const el = ref.current
+  const roRef = useRef<ResizeObserver | null>(null)
+  const attach = useCallback((el: HTMLDivElement | null) => {
+    roRef.current?.disconnect()
+    roRef.current = null
     if (!el) return
     const update = () => {
+      // O contêiner observado é só a área do slide, então a imagem pode
+      // ocupar praticamente tudo — quanto maior, melhor de trabalhar.
       const rect = el.getBoundingClientRect()
-      // Reserva pro "chrome" do palco: paddings, botões de download e o
-      // aviso de estouro quando ele aparece — senão o slide corta embaixo.
-      const byHeight = (rect.height - 150) * (1080 / 1350)
-      setW(Math.max(220, Math.min(rect.width - 48, byHeight)))
+      const byHeight = (rect.height - 8) * (1080 / 1350)
+      setW(Math.max(220, Math.min(rect.width - 16, byHeight)))
     }
     update()
     const ro = new ResizeObserver(update)
     ro.observe(el)
-    return () => ro.disconnect()
-  }, [ref])
-  return w
+    roRef.current = ro
+  }, [])
+  return [w, attach]
 }
 
 export default function App() {
@@ -136,7 +186,7 @@ export default function App() {
   // inicial padrão atropela o que estava salvo.
   const [hydrated, setHydrated] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
-  const previewWidth = usePreviewWidth(previewRef)
+  const [previewWidth, attachPreviewBox] = usePreviewWidth()
   const filmstripRef = useRef<HTMLElement>(null)
 
   // Mantém o slide selecionado visível no filme de miniaturas — inclusive
@@ -701,10 +751,14 @@ export default function App() {
                 key={opt.type}
                 type="button"
                 className="btn btn--full btn--add"
+                style={{ borderLeft: `3px solid ${TYPE_COLOR[opt.type]}` }}
                 onClick={() => addSlide(opt.type)}
               >
-                <span>+ {opt.label}</span>
-                <small>{opt.hint}</small>
+                <TypeIcon type={opt.type} />
+                <span className="btn-add-label">
+                  <span>+ {opt.label}</span>
+                  <small>{opt.hint}</small>
+                </span>
               </button>
             ))}
           </section>
@@ -792,8 +846,14 @@ export default function App() {
         <main className="stage" ref={previewRef}>
           {selected ? (
             <>
-              <div className="preview-canvas">
-                <SlideRenderer slide={selected} project={project} width={previewWidth} />
+              <div className="stage-canvas" ref={attachPreviewBox}>
+                <div className="preview-canvas">
+                  <SlideRenderer
+                    slide={selected}
+                    project={project}
+                    width={previewWidth}
+                  />
+                </div>
               </div>
               {textOverflow && (
                 <p className="overflow-warning">
@@ -801,28 +861,6 @@ export default function App() {
                   Toque em A− ou encurte o texto.
                 </p>
               )}
-              <div className="preview-actions">
-                <button type="button" className="btn" onClick={exportPng}>
-                  Baixar este slide (PNG)
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  title="PNG transparente só com os textos e a moldura, pra compor por cima de um vídeo em outro editor"
-                  onClick={exportOverlay}
-                >
-                  Arte transparente
-                </button>
-                {selectedHasVideo && (
-                  <button type="button" className="btn btn--primary" onClick={exportVideo}>
-                    Exportar vídeo
-                  </button>
-                )}
-              </div>
-              <p className="preview-hint">
-                Arte transparente = PNG sem as fotos, pra compor por cima de um
-                vídeo em outro editor.
-              </p>
             </>
           ) : (
             <p className="preview-empty">
@@ -840,13 +878,22 @@ export default function App() {
                 <h2>
                   Slide {selectedIndex + 1} de {project.slides.length}
                 </h2>
-                <span className="slide-type-badge">{TYPE_LABEL[selected.type]}</span>
+                <span
+                  className="slide-type-badge"
+                  style={{ background: TYPE_COLOR[selected.type] }}
+                >
+                  {TYPE_LABEL[selected.type]}
+                </span>
               </div>
 
               {'media' in selected && (
                 <section className="card">
                   <h2 className="card-title">
-                    {selected.type === 'book' ? 'Imagem' : 'Foto ou vídeo'}
+                    {selected.type === 'book'
+                      ? 'Imagem'
+                      : selected.type === 'development'
+                        ? 'Foto ou vídeo de fundo'
+                        : 'Foto ou vídeo'}
                   </h2>
                   <div className="control-row control-row--wrap">
                     <FileButton
@@ -1100,6 +1147,35 @@ export default function App() {
                   </button>
                 </div>
               </section>
+
+              <section className="card">
+                <h2 className="card-title">Baixar este slide</h2>
+                <div className="control-row control-row--wrap">
+                  <button type="button" className="btn btn--small" onClick={exportPng}>
+                    PNG
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--small"
+                    onClick={exportOverlay}
+                  >
+                    Arte transparente
+                  </button>
+                  {selectedHasVideo && (
+                    <button
+                      type="button"
+                      className="btn btn--small btn--primary"
+                      onClick={exportVideo}
+                    >
+                      Exportar vídeo
+                    </button>
+                  )}
+                </div>
+                <p className="hint">
+                  Arte transparente = PNG sem as fotos, pra compor por cima de um
+                  vídeo em outro editor.
+                </p>
+              </section>
             </>
           )}
         </aside>
@@ -1121,6 +1197,10 @@ export default function App() {
                   <SlideRenderer slide={slide} project={project} width={92} thumbnail />
                 </span>
                 <span className="thumb-label">
+                  <span
+                    className="thumb-dot"
+                    style={{ background: TYPE_COLOR[slide.type] }}
+                  />
                   {i + 1} · {TYPE_LABEL[slide.type]}
                 </span>
               </button>

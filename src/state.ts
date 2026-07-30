@@ -68,6 +68,7 @@ export function makeSlide(type: SlideType): Slide {
       const s: DevelopmentSlide = {
         ...base,
         type,
+        media: null,
         body:
           'Escreva aqui o desenvolvimento do argumento, em parágrafos curtos de duas ou três linhas. Linha em branco separa parágrafos.\n\nO formato pede texto de verdade: traga o contexto que as fotos não contam — de onde saíram os números, o que aconteceu antes, quem decidiu o quê.\n\nUse **negrito** para dar peso, *itálico* para citações e _sublinhado_ para destacar.',
         emphasis: '',
@@ -123,25 +124,28 @@ export function defaultProject(): Project {
     ),
   ]
 
-  const dev = makeSlide('development') as DevelopmentSlide
-  dev.body =
-    'Aqui entra o desenvolvimento: você conecta os dados que mostrou e explica o que eles significam juntos. Parágrafos curtos, de duas ou três linhas — a pessoa lê no celular, com o dedo pronto pra deslizar.\n\nTraga o contexto que as fotos não contam: de onde saíram os números, quem decidiu o quê. Use **negrito**, *itálico* e _sublinhado_.'
-  dev.emphasis = 'A conclusão forte fecha em negrito.'
-
-  const book = makeSlide('book') as BookSlide
-
-  const photo1 = makeSlide('comparison') as ComparisonSlide
-  photo1.text =
-    'Depois do desenvolvimento, respiro: uma foto inteira e uma frase de impacto. Duas ou três linhas seguram bem.'
+  const dev1 = makeSlide('development') as DevelopmentSlide
+  dev1.body =
+    'Aqui entra o desenvolvimento: você conecta os dados que mostrou e explica o que eles significam juntos. Parágrafos curtos, de duas ou três linhas — a pessoa lê no celular, com o dedo pronto pra deslizar.\n\nColoque uma foto de fundo neste slide: a sombra escura garante a leitura por cima dela.'
+  dev1.emphasis = 'A conclusão forte fecha em negrito.'
 
   const split5 = split(
     'No meio do carrossel dá pra voltar pra comparação, no mesmo padrão dos primeiros pares.',
-    'Alternando com as fotos inteiras, o ritmo da leitura não cansa.',
+    'Alternando com os desenvolvimentos, o ritmo da leitura não cansa.',
   )
 
-  const photo2 = makeSlide('comparison') as ComparisonSlide
-  photo2.text =
-    'Mais uma foto de fundo segurando uma frase forte antes do convite final.'
+  const dev2 = makeSlide('development') as DevelopmentSlide
+  dev2.body =
+    'O segundo desenvolvimento aprofunda: mais contexto, mais consequência. Use **negrito**, *itálico* e _sublinhado_ quando precisar.'
+
+  const split6 = split(
+    'Mais um par de comparação pra sustentar o argumento.',
+    'O contraste continua fazendo o trabalho pesado.',
+  )
+
+  const dev3 = makeSlide('development') as DevelopmentSlide
+  dev3.body =
+    'O último desenvolvimento amarra o argumento e prepara o convite final do próximo slide.'
 
   const fin = makeSlide('final') as FinalSlide
 
@@ -149,7 +153,7 @@ export function defaultProject(): Project {
     title: 'Meu primeiro carrossel',
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
-    slides: [...splits, dev, book, photo1, split5, photo2, fin],
+    slides: [...splits, dev1, split5, dev2, split6, dev3, fin],
   }
 }
 
@@ -167,10 +171,10 @@ export function blankProject(captions?: {
     'split',
     'split',
     'development',
-    'book',
-    'comparison',
     'split',
-    'comparison',
+    'development',
+    'split',
+    'development',
     'final',
   ]
   const slides = structure.map((t) => {
@@ -512,6 +516,7 @@ export function normalizeProject(data: unknown): Project | null {
         merged.textPosition = merged.textPosition === 'top' ? 'top' : 'bottom'
         break
       case 'development':
+        merged.media = sanitizeMedia(merged.media)
         merged.body = str(merged.body, '')
         merged.emphasis = str(merged.emphasis, '')
         break

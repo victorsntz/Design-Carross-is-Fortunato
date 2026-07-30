@@ -94,20 +94,8 @@ function Captions({ project }: { project: Project }) {
   )
 }
 
-function Chrome({
-  project,
-  frame = true,
-}: {
-  project: Project
-  /** Tela partida desenha uma moldura por metade, então dispensa a geral. */
-  frame?: boolean
-}) {
-  return (
-    <>
-      {frame && <div className="sl-frame" />}
-      <Captions project={project} />
-    </>
-  )
+function Chrome({ project }: { project: Project }) {
+  return <Captions project={project} />
 }
 
 function Placeholder({ label }: { label: string }) {
@@ -147,7 +135,6 @@ function SplitHalfLayers({
       <div className="sl-split-text" style={{ fontSize }}>
         {renderInline(half.text)}
       </div>
-      <div className={`sl-split-frame sl-split-frame--${region}`} />
     </div>
   )
 }
@@ -214,15 +201,33 @@ function ComparisonLayers({
   )
 }
 
-function DevelopmentLayers({ slide }: { slide: DevelopmentSlide }) {
+function DevelopmentLayers({
+  slide,
+  media,
+  mode,
+  still,
+}: {
+  slide: DevelopmentSlide
+  media: SlideMedia | null
+  mode: RenderMode
+  still: boolean
+}) {
   const fontSize = fontSizeFor(slide)
   return (
-    <div className="sl-dev" style={{ fontSize }}>
-      {renderParagraphs(slide.body)}
-      {slide.emphasis.trim() !== '' && (
-        <p className="sl-emphasis">{renderInline(slide.emphasis)}</p>
+    <>
+      {media && mode !== 'overlay' && (
+        <MediaEl media={media} className="sl-media-full" still={still} />
       )}
-    </div>
+      {/* sombra forte por cima da foto pra garantir a leitura do texto;
+          entra na arte transparente também, pra escurecer o vídeo composto */}
+      {media && <div className="sl-dev-scrim" />}
+      <div className="sl-dev" style={{ fontSize }}>
+        {renderParagraphs(slide.body)}
+        {slide.emphasis.trim() !== '' && (
+          <p className="sl-emphasis">{renderInline(slide.emphasis)}</p>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -318,7 +323,9 @@ export function SlideRenderer({
       )
       break
     case 'development':
-      layers = <DevelopmentLayers slide={slide} />
+      layers = (
+        <DevelopmentLayers slide={slide} media={media} mode={mode} still={thumbnail} />
+      )
       break
     case 'book':
       layers = <BookLayers slide={slide} media={media} mode={mode} />
@@ -335,7 +342,7 @@ export function SlideRenderer({
         style={{ transform: `scale(${scale})` }}
       >
         {layers}
-        <Chrome project={project} frame={slide.type !== 'split'} />
+        <Chrome project={project} />
       </div>
     </div>
   )
