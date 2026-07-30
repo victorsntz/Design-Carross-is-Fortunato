@@ -1,0 +1,46 @@
+# Criador de Carrosséis
+
+Editor web para montar carrosséis no formato da metodologia: **comparação → desenvolvimento → final**.
+O design já vem pronto e travado — quem usa só troca fotos, vídeos e textos apertando botões.
+Nada de arrastar elementos: a diagramação nunca quebra.
+
+## O que dá pra fazer
+
+- **4 tipos de slide** com o design fixo do formato:
+  - **Comparação** — foto ou vídeo de fundo + frase curta (em cima ou embaixo)
+  - **Desenvolvimento** — fundo preto + parágrafos + frase de fechamento em negrito
+  - **Livro / Oferta** — imagem do produto centralizada + texto
+  - **Final (CTA)** — texto "Me segue se…" à esquerda + foto à direita
+- **Tudo por botões**: trocar mídia, aumentar/diminuir texto (5 tamanhos), posição do texto,
+  reordenar, duplicar e excluir slides.
+- **Vídeo direto no slide**: sobe o vídeo, ele vira o fundo do slide, e o app exporta o
+  vídeo pronto com a arte (textos, borda, granulado) por cima — sem precisar de Figma + editor.
+- **Exportações**:
+  - PNG 1080×1350 por slide, ou todos de uma vez em ZIP
+  - Vídeo do slide (MP4 no Chrome; WebM em navegadores sem suporte a MP4)
+  - Arte transparente (PNG sem a mídia) pra compor sobre vídeo em qualquer editor
+- **Mini-formatação nos textos**: `**negrito**`, `*itálico*`, `_sublinhado_`.
+  Linha em branco separa parágrafos.
+- **Projeto salvo sozinho** no navegador, e dá pra baixar/abrir o projeto como arquivo `.json`
+  (vídeos não ficam salvos no projeto — só valem na sessão atual).
+
+## Rodando localmente
+
+```bash
+npm install
+npm run dev
+```
+
+## Publicando no GitHub Pages
+
+O deploy é automático: todo push na branch principal roda o workflow
+`.github/workflows/deploy.yml` e publica o site.
+
+Só precisa ativar uma vez: **Settings → Pages → Source → GitHub Actions**.
+
+## Stack
+
+- React + TypeScript + Vite (100% no navegador, sem servidor)
+- `modern-screenshot` para gerar os PNGs a partir do slide renderizado
+- `MediaRecorder` + canvas para a exportação de vídeo
+- Fonte: Tinos (serifada, métrica de Times New Roman), embarcada via Fontsource
