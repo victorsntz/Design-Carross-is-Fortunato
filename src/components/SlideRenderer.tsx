@@ -143,7 +143,7 @@ function SplitHalfLayers({
           </span>
         </div>
       )}
-      <div className="sl-split-grad" />
+      {half.text.trim() !== '' && <div className="sl-split-grad" />}
       <div className="sl-split-text" style={{ fontSize }}>
         {renderInline(half.text)}
       </div>
@@ -204,7 +204,7 @@ function ComparisonLayers({
         <MediaEl media={media} className="sl-media-full" still={still} />
       )}
       {!media && mode === 'full' && (
-        <Placeholder label={'Sem foto ainda.\nUse “Adicionar foto ou vídeo”.'} />
+        <Placeholder label={'Sem foto ainda.\nUse “Enviar arquivo” ou “Colar imagem”.'} />
       )}
       {slide.text.trim() !== '' && <div className={gradClass} />}
       <div className={`sl-comp-text ${posClass}`} style={{ fontSize }}>
@@ -248,12 +248,14 @@ function BookLayers({
           src={media.src}
           alt=""
         />
+      ) : mode === 'full' ? (
+        <div className="sl-book-img sl-book-img--empty">
+          <span>Capa do livro / imagem do produto</span>
+        </div>
       ) : (
-        mode === 'full' && (
-          <div className="sl-book-img sl-book-img--empty">
-            <span>Capa do livro / imagem do produto</span>
-          </div>
-        )
+        // Exportar sem imagem: um espaçador invisível do mesmo tamanho do
+        // placeholder mantém o texto na mesma posição que o preview mostrou.
+        <div className="sl-book-img sl-book-img--empty sl-book-img--ghost" />
       )}
       <div className="sl-book-body">{renderParagraphs(slide.body)}</div>
     </div>
@@ -326,17 +328,12 @@ export function SlideRenderer({
       break
   }
 
-  const rootClass = [
-    'sl-root',
-    `sl-align--${project.align}`,
-    mode === 'overlay' ? 'sl-root--overlay' : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
-
   return (
     <div className="sl-scale-outer" style={outerStyle}>
-      <div className={rootClass} style={{ transform: `scale(${scale})` }}>
+      <div
+        className={mode === 'overlay' ? 'sl-root sl-root--overlay' : 'sl-root'}
+        style={{ transform: `scale(${scale})` }}
+      >
         {layers}
         <Chrome project={project} frame={slide.type !== 'split'} />
       </div>

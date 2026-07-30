@@ -198,6 +198,7 @@ export async function exportSlideVideo(
   slide: Slide,
   project: Project,
   onProgress: (fraction: number) => void,
+  signal?: AbortSignal,
 ): Promise<VideoExportResult> {
   const layers = mediaLayers(slide)
   if (!layers.some((l) => l.media.kind === 'video')) {
@@ -280,6 +281,7 @@ export async function exportSlideVideo(
   // duração do resultado e cai pro próximo formato se sair quebrado.
   try {
     for (const mime of mimes) {
+      if (signal?.aborted) break
       const blob = await recordPass(
         mime,
         videos,
@@ -288,7 +290,9 @@ export async function exportSlideVideo(
         drawFrame,
         audioTracks,
         onProgress,
+        signal,
       )
+      if (signal?.aborted) break
       if (blob && blob.size > 0 && (await recordingLooksComplete(blob, main.duration))) {
         return { blob, extension: mime.includes('mp4') ? 'mp4' : 'webm' }
       }
@@ -301,6 +305,7 @@ export async function exportSlideVideo(
       v.load()
     }
   }
+  if (signal?.aborted) throw new Error('Exportação cancelada.')
   throw new Error('Não foi possível gravar o vídeo neste navegador. Tente o Chrome.')
 }
 
@@ -339,6 +344,7 @@ async function recordPass(
   drawFrame: () => void,
   audioTracks: MediaStreamTrack[],
   onProgress: (fraction: number) => void,
+  signal?: AbortSignal,
 ): Promise<Blob | null> {
   // Volta todos pro início (importante quando o formato anterior falhou)
   for (const v of videos) {
@@ -410,12 +416,19 @@ async function recordPass(
         })
       }
     }
+    const onAbort = () => {
+      failed = true
+      done()
+    }
     function done() {
       cancelAnimationFrame(rafId)
       clearTimeout(timeoutId)
       document.removeEventListener('visibilitychange', onVisibility)
+      signal?.removeEventListener('abort', onAbort)
       resolve()
     }
+    signal?.addEventListener('abort', onAbort)
+    if (signal?.aborted) onAbort()
     recorder.onerror = () => {
       failed = true
       done()

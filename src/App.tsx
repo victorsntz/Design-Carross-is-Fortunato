@@ -12,12 +12,17 @@ import type {
 } from './types'
 import { SlideRenderer, SIZE_STEPS } from './components/SlideRenderer'
 import {
+  blankProject,
   defaultProject,
-  loadProjectFromStorage,
+  deleteProjectFromStorage,
+  listProjects,
+  loadCurrentProject,
+  loadProject,
   makeSlide,
   newId,
   normalizeProject,
   saveProjectToStorage,
+  type ProjectSummary,
 } from './state'
 import { clipboardToMedia, fileToMedia } from './media'
 import {
@@ -37,8 +42,36 @@ const TYPE_LABEL: Record<SlideType, string> = {
   final: 'Final (CTA)',
 }
 
+const ADD_OPTIONS: { type: SlideType; label: string; hint: string }[] = [
+  { type: 'split', label: 'Tela partida', hint: 'o par de comparação' },
+  { type: 'comparison', label: 'Foto de fundo', hint: 'foto inteira + frase' },
+  { type: 'development', label: 'Desenvolvimento', hint: 'o texto denso' },
+  { type: 'book', label: 'Livro / Oferta', hint: 'seu produto' },
+  { type: 'final', label: 'Final (CTA)', hint: 'o convite "me segue"' },
+]
+
 /** Onde uma mídia entra num slide: no espaço único ou numa das metades. */
 type MediaSlot = 'media' | 'top' | 'bottom'
+
+function slugify(text: string): string {
+  return (
+    text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'carrossel'
+  )
+}
+
+function formatWhen(ts: number): string {
+  if (!ts) return ''
+  return new Date(ts).toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+  })
+}
 
 function FileButton({
   label,
@@ -79,7 +112,9 @@ function usePreviewWidth(ref: React.RefObject<HTMLElement>): number {
     if (!el) return
     const update = () => {
       const rect = el.getBoundingClientRect()
-      const byHeight = (rect.height - 96) * (1080 / 1350)
+      // Reserva pro "chrome" do palco: paddings, botões de download e o
+      // aviso de estouro quando ele aparece — senão o slide corta embaixo.
+      const byHeight = (rect.height - 150) * (1080 / 1350)
       setW(Math.max(220, Math.min(rect.width - 48, byHeight)))
     }
     update()
@@ -92,27 +127,59 @@ function usePreviewWidth(ref: React.RefObject<HTMLElement>): number {
 
 export default function App() {
   const [project, setProject] = useState<Project>(defaultProject)
+  const [projectId, setProjectId] = useState<string>(() => newId())
+  const [saved, setSaved] = useState<ProjectSummary[]>([])
   const [selectedId, setSelectedId] = useState<string>(() => project.slides[0]?.id ?? '')
   const [busy, setBusy] = useState<string | null>(null)
   const [draftFailed, setDraftFailed] = useState(false)
-  // Só grava rascunho depois de tentar restaurar o anterior, senão o estado
+  // Só grava depois de tentar restaurar o carrossel anterior, senão o estado
   // inicial padrão atropela o que estava salvo.
   const [hydrated, setHydrated] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
   const previewWidth = usePreviewWidth(previewRef)
+  const filmstripRef = useRef<HTMLElement>(null)
+
+  // Mantém o slide selecionado visível no filme de miniaturas — inclusive
+  // quando ele muda de posição pelas setas de reordenar.
+  const selectedIndexForScroll = project.slides.findIndex((s) => s.id === selectedId)
+  useEffect(() => {
+    filmstripRef.current
+      ?.querySelector('.thumb--active')
+      ?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
+  }, [selectedId, selectedIndexForScroll])
 
   const projectRef = useRef(project)
   projectRef.current = project
+  const projectIdRef = useRef(projectId)
+  projectIdRef.current = projectId
+  // Ids excluídos nunca mais podem ser salvos: um rascunho pendente que
+  // disparasse depois do "Excluir" ressuscitaria o carrossel apagado.
+  const deletedIdsRef = useRef<Set<string>>(new Set())
+  // Última versão gravada com sucesso: o flush de saída só escreve quando algo
+  // mudou — uma aba parada não pode atropelar o trabalho feito em outra aba.
+  const lastSavedRef = useRef<Project | null>(null)
+
+  function refreshList() {
+    void listProjects().then(setSaved)
+  }
+
+  // Pede ao navegador pra não descartar o armazenamento em limpezas de disco.
+  useEffect(() => {
+    void navigator.storage?.persist?.().catch(() => {})
+  }, [])
 
   useEffect(() => {
     let cancelled = false
-    void loadProjectFromStorage().then((saved) => {
+    void loadCurrentProject().then((current) => {
       if (cancelled) return
-      if (saved) {
-        setProject(saved)
-        setSelectedId(saved.slides[0]?.id ?? '')
+      if (current) {
+        setProjectId(current.id)
+        setProject(current.project)
+        setSelectedId(current.project.slides[0]?.id ?? '')
+        lastSavedRef.current = current.project
       }
       setHydrated(true)
+      refreshList()
     })
     return () => {
       cancelled = true
@@ -122,16 +189,36 @@ export default function App() {
   useEffect(() => {
     if (!hydrated) return
     const t = setTimeout(() => {
-      void saveProjectToStorage(project).then((ok) => setDraftFailed(!ok))
+      if (deletedIdsRef.current.has(projectId)) return
+      void saveProjectToStorage(projectId, project).then((ok) => {
+        setDraftFailed(!ok)
+        if (ok) {
+          lastSavedRef.current = project
+          setSaved((list) => {
+            const entry: ProjectSummary = {
+              id: projectId,
+              title: project.title.trim() || 'Carrossel sem título',
+              updatedAt: Date.now(),
+              slideCount: project.slides.length,
+            }
+            const rest = list.filter((s) => s.id !== projectId)
+            return [entry, ...rest]
+          })
+        }
+      })
     }, 500)
     return () => clearTimeout(t)
-  }, [project, hydrated])
+  }, [project, projectId, hydrated])
 
-  // Saiu da aba (ou fechou) antes do rascunho automático rodar? Salva já.
+  // Saiu da aba (ou fechou) antes do salvamento automático rodar? Salva já.
   useEffect(() => {
     if (!hydrated) return
     const flush = () => {
-      void saveProjectToStorage(projectRef.current)
+      if (deletedIdsRef.current.has(projectIdRef.current)) return
+      // Nada mudou desde a última gravação? Não escreve nada — senão uma aba
+      // esquecida sobrescreveria o trabalho recente de outra aba.
+      if (projectRef.current === lastSavedRef.current) return
+      void saveProjectToStorage(projectIdRef.current, projectRef.current)
     }
     const onVisibility = () => {
       if (document.hidden) flush()
@@ -283,13 +370,26 @@ export default function App() {
       const current = project.slides.find((s) => s.id === selectedId) ?? project.slides[0]
       if (!current) return
       let slot: MediaSlot | null = null
+      let occupied = false
       if (current.type === 'split') {
-        slot = !current.top.media ? 'top' : !current.bottom.media ? 'bottom' : 'top'
+        if (!current.top.media) slot = 'top'
+        else if (!current.bottom.media) slot = 'bottom'
+        else {
+          slot = 'top'
+          occupied = true
+        }
       } else if ('media' in current) {
         slot = 'media'
+        occupied = current.media !== null
       }
       if (!slot) return
       e.preventDefault()
+      if (
+        occupied &&
+        !window.confirm('Este slide já tem foto. Substituir pela imagem colada?')
+      ) {
+        return
+      }
       void setSlideMediaFromFile(current.id, slot, file)
     }
     document.addEventListener('paste', onPaste)
@@ -303,101 +403,19 @@ export default function App() {
     }))
   }
 
+  const cancelRef = useRef<AbortController | null>(null)
+
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(label)
     try {
       await fn()
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Algo deu errado na exportação.')
+      const msg = err instanceof Error ? err.message : 'Algo deu errado na exportação.'
+      // Cancelamento pedido pela própria pessoa não é erro
+      if (msg !== 'Exportação cancelada.') window.alert(msg)
     } finally {
       setBusy(null)
     }
-  }
-
-  const slideFileName = (i: number) => `slide-${String(i + 1).padStart(2, '0')}`
-
-  /** Evita exportar com as assinaturas de exemplo ainda no topo dos slides. */
-  function confirmExampleCaptions(): boolean {
-    const isExample =
-      project.captionLeft.includes('ESCREVA AQUI') ||
-      project.captionRight.includes('REPITA OU VARIE')
-    return (
-      !isExample ||
-      window.confirm(
-        'As assinaturas do topo ainda são o texto de exemplo (veja "Identidade" no painel). Exportar mesmo assim?',
-      )
-    )
-  }
-
-  function exportPng() {
-    if (!selected || !confirmExampleCaptions()) return
-    void run('Gerando PNG…', async () => {
-      const blob = await exportSlidePng(selected, project)
-      downloadBlob(blob, `${slideFileName(selectedIndex)}.png`)
-    })
-  }
-
-  function exportOverlay() {
-    if (!selected) return
-    void run('Gerando arte transparente…', async () => {
-      const blob = await exportOverlayPng(selected, project)
-      downloadBlob(blob, `${slideFileName(selectedIndex)}-arte-transparente.png`)
-    })
-  }
-
-  function exportVideo() {
-    if (!selected || !confirmExampleCaptions()) return
-    void run('Exportando vídeo…', async () => {
-      const result = await exportSlideVideo(selected, project, (f) =>
-        setBusy(
-          `Exportando vídeo… ${Math.round(f * 100)}% (tempo real — se trocar de aba, a exportação pausa e continua quando você voltar)`,
-        ),
-      )
-      downloadBlob(result.blob, `${slideFileName(selectedIndex)}.${result.extension}`)
-    })
-  }
-
-  function exportZip() {
-    if (!confirmExampleCaptions()) return
-    if (
-      project.slides.some(slideHasVideo) &&
-      !window.confirm(
-        'Slides com vídeo entram no ZIP como imagem parada (um frame). O vídeo pronto você baixa slide a slide, no botão "Exportar vídeo". Continuar?',
-      )
-    ) {
-      return
-    }
-    void run('Gerando todos os PNGs…', async () => {
-      const blob = await exportAllPngZip(project, (done, total) =>
-        setBusy(`Gerando PNGs… ${done}/${total}`),
-      )
-      downloadBlob(blob, 'carrossel.zip')
-    })
-  }
-
-  function saveJson() {
-    const blob = new Blob([JSON.stringify(project, null, 2)], {
-      type: 'application/json',
-    })
-    downloadBlob(blob, 'projeto-carrossel.json')
-  }
-
-  async function openJson(file: File) {
-    try {
-      const parsed = normalizeProject(JSON.parse(await file.text()))
-      if (!parsed) throw new Error('Este arquivo não parece ser um projeto válido.')
-      setProject(parsed)
-      setSelectedId(parsed.slides[0].id)
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Falha ao abrir o projeto.')
-    }
-  }
-
-  function resetProject() {
-    if (!window.confirm('Recomeçar do zero? O projeto atual será substituído.')) return
-    const fresh = defaultProject()
-    setProject(fresh)
-    setSelectedId(fresh.slides[0].id)
   }
 
   const selectedHasVideo = selected ? slideHasVideo(selected) : false
@@ -412,8 +430,14 @@ export default function App() {
         return
       }
       let bad = false
+      // scrollHeight não enxerga estouro pra CIMA (bloco ancorado embaixo):
+      // compara os limites dos filhos com os do contêiner.
       root.querySelectorAll('.sl-dev, .sl-book').forEach((el) => {
-        if (el.scrollHeight > el.clientHeight + 2) bad = true
+        const c = el.getBoundingClientRect()
+        for (const child of Array.from(el.children)) {
+          const r = child.getBoundingClientRect()
+          if (r.top < c.top - 2 || r.bottom > c.bottom + 2) bad = true
+        }
       })
       const within = (el: Element, container: Element) => {
         const r = el.getBoundingClientRect()
@@ -441,75 +465,331 @@ export default function App() {
     return () => clearTimeout(t)
   }, [project, selectedId, previewWidth])
 
+  const slideFileName = (i: number) =>
+    `${slugify(project.title)}-slide-${String(i + 1).padStart(2, '0')}`
+
+  /** Evita exportar com assinaturas ou textos de exemplo ainda nos slides. */
+  function confirmExampleCaptions(): boolean {
+    const exampleCaptions =
+      project.captionLeft.includes('ESCREVA AQUI') ||
+      project.captionRight.includes('REPITA OU VARIE')
+    if (
+      exampleCaptions &&
+      !window.confirm(
+        'As assinaturas do topo ainda são o texto de exemplo (troque na seção "Assinaturas do topo"). Exportar mesmo assim?',
+      )
+    ) {
+      return false
+    }
+    const tutorialMarks = [
+      'Lado A: comece com o dado mais forte',
+      'Aqui entra o desenvolvimento: você conecta os dados',
+      'Depois do desenvolvimento, respiro',
+    ]
+    const hasTutorialText = project.slides.some((s) => {
+      const texts =
+        s.type === 'split'
+          ? [s.top.text, s.bottom.text]
+          : s.type === 'development'
+            ? [s.body]
+            : 'text' in s
+              ? [s.text]
+              : [s.body]
+      return texts.some((t) => tutorialMarks.some((m) => t.includes(m)))
+    })
+    if (
+      hasTutorialText &&
+      !window.confirm(
+        'Alguns slides ainda têm o texto de exemplo do tutorial. Exportar mesmo assim?',
+      )
+    ) {
+      return false
+    }
+    return true
+  }
+
+  function exportPng() {
+    if (!selected || !confirmExampleCaptions()) return
+    void run('Gerando PNG…', async () => {
+      const blob = await exportSlidePng(selected, project)
+      downloadBlob(blob, `${slideFileName(selectedIndex)}.png`)
+    })
+  }
+
+  function exportOverlay() {
+    if (!selected || !confirmExampleCaptions()) return
+    void run('Gerando arte transparente…', async () => {
+      const blob = await exportOverlayPng(selected, project)
+      downloadBlob(blob, `${slideFileName(selectedIndex)}-arte.png`)
+    })
+  }
+
+  function exportVideo() {
+    if (!selected || !confirmExampleCaptions()) return
+    const controller = new AbortController()
+    cancelRef.current = controller
+    void run('Exportando vídeo…', async () => {
+      try {
+        const result = await exportSlideVideo(
+          selected,
+          project,
+          (f) =>
+            setBusy(
+              `Exportando vídeo… ${Math.round(f * 100)}% (tempo real — se trocar de aba, a exportação pausa e continua quando você voltar)`,
+            ),
+          controller.signal,
+        )
+        downloadBlob(result.blob, `${slideFileName(selectedIndex)}.${result.extension}`)
+      } finally {
+        cancelRef.current = null
+      }
+    })
+  }
+
+  function exportZip() {
+    if (!confirmExampleCaptions()) return
+    if (
+      project.slides.some(slideHasVideo) &&
+      !window.confirm(
+        'Slides com vídeo entram no ZIP como imagem parada (um frame). O vídeo pronto você baixa slide a slide, no botão "Exportar vídeo". Continuar?',
+      )
+    ) {
+      return
+    }
+    void run('Gerando todos os PNGs…', async () => {
+      const blob = await exportAllPngZip(project, (done, total) =>
+        setBusy(`Gerando PNGs… ${done}/${total}`),
+      )
+      downloadBlob(blob, `${slugify(project.title)}.zip`)
+    })
+  }
+
+  function saveJson() {
+    const blob = new Blob([JSON.stringify(project, null, 2)], {
+      type: 'application/json',
+    })
+    downloadBlob(blob, `${slugify(project.title)}.json`)
+  }
+
+  /** Salva o carrossel aberto antes de sair dele; false = usuário desistiu. */
+  async function saveBeforeLeaving(): Promise<boolean> {
+    if (deletedIdsRef.current.has(projectIdRef.current)) return true
+    const ok = await saveProjectToStorage(projectIdRef.current, projectRef.current)
+    if (ok) {
+      lastSavedRef.current = projectRef.current
+      return true
+    }
+    return window.confirm(
+      'Não consegui salvar o carrossel atual neste navegador. Continuar mesmo assim e perder as alterações dele?',
+    )
+  }
+
+  async function openJson(file: File) {
+    try {
+      const parsed = normalizeProject(JSON.parse(await file.text()))
+      if (!parsed) throw new Error('Este arquivo não parece ser um projeto válido.')
+      // Entra como um carrossel novo na lista, sem sobrescrever o atual
+      if (!(await saveBeforeLeaving())) return
+      setProjectId(newId())
+      setProject(parsed)
+      setSelectedId(parsed.slides[0]?.id ?? '')
+      refreshList()
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Falha ao abrir o projeto.')
+    }
+  }
+
+  async function newCarousel() {
+    if (!(await saveBeforeLeaving())) return
+    // Estrutura do método com textos em branco, herdando as assinaturas que
+    // a pessoa já configurou — o baralho-tutorial só aparece na primeira vez.
+    const fresh = blankProject({
+      captionLeft: projectRef.current.captionLeft,
+      captionRight: projectRef.current.captionRight,
+    })
+    setProjectId(newId())
+    setProject(fresh)
+    setSelectedId(fresh.slides[0].id)
+    refreshList()
+  }
+
+  async function openCarousel(id: string) {
+    if (id === projectId) return
+    if (!(await saveBeforeLeaving())) return
+    const loaded = await loadProject(id)
+    if (!loaded) {
+      window.alert('Não consegui abrir este carrossel.')
+      return
+    }
+    setProjectId(id)
+    setProject(loaded)
+    setSelectedId(loaded.slides[0]?.id ?? '')
+    refreshList()
+  }
+
+  async function deleteCarousel(id: string) {
+    const entry = saved.find((s) => s.id === id)
+    if (!window.confirm(`Excluir "${entry?.title ?? 'este carrossel'}"? Não dá pra desfazer.`)) {
+      return
+    }
+    // O tombstone entra ANTES do delete: um rascunho pendente que dispare
+    // durante a exclusão não pode regravar o registro.
+    deletedIdsRef.current.add(id)
+    await deleteProjectFromStorage(id)
+    if (id === projectId) {
+      const fresh = blankProject({
+        captionLeft: projectRef.current.captionLeft,
+        captionRight: projectRef.current.captionRight,
+      })
+      setProjectId(newId())
+      setProject(fresh)
+      setSelectedId(fresh.slides[0].id)
+    }
+    refreshList()
+  }
+
+  // Nada de editar antes de restaurar o que estava salvo: uma digitação nesse
+  // intervalo seria atropelada quando o carrossel anterior chegasse.
+  if (!hydrated) {
+    return (
+      <div className="app app--loading">
+        <p>Carregando seus carrosséis…</p>
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <header className="topbar">
         <div className="topbar-title">
           <h1>Criador de Carrosséis</h1>
           <span className="topbar-sub">comparação → desenvolvimento → final</span>
-          {draftFailed && (
-            <span className="warn-badge">
-              Não consegui salvar o rascunho automático no navegador — use
-              “Baixar projeto” pra não perder nada.
-            </span>
-          )}
         </div>
-        <div className="topbar-actions">
-          <button type="button" className="btn" onClick={saveJson}>
-            Baixar projeto
-          </button>
-          <FileButton label="Abrir projeto" accept="application/json,.json" onFile={openJson} />
-          <button type="button" className="btn" onClick={resetProject}>
-            Recomeçar
-          </button>
-          <button type="button" className="btn btn--primary" onClick={exportZip}>
-            Baixar todos (ZIP)
-          </button>
-        </div>
+        {draftFailed ? (
+          <span className="save-status save-status--error">
+            Não consegui salvar neste navegador — use “Baixar backup” pra não perder
+            nada.
+          </span>
+        ) : (
+          <span className="save-status">Salvo automaticamente neste navegador</span>
+        )}
       </header>
 
       <div className="workspace">
-        <aside className="filmstrip">
-          <div className="filmstrip-list">
-            {project.slides.map((slide, i) => (
+        {/* ============ ESQUERDA: o projeto como um todo ============ */}
+        <aside className="panel panel--project">
+          <section className="card">
+            <h2 className="card-title">Este carrossel</h2>
+            <label className="field">
+              <span>Título</span>
+              <input
+                type="text"
+                value={project.title}
+                onChange={(e) => setProject((p) => ({ ...p, title: e.target.value }))}
+              />
+            </label>
+            <button type="button" className="btn btn--primary btn--full" onClick={exportZip}>
+              Baixar todos os slides (ZIP)
+            </button>
+            <p className="hint">PNGs de 1080×1350, prontos pro Instagram.</p>
+          </section>
+
+          <section className="card">
+            <h2 className="card-title">Adicionar slide</h2>
+            {ADD_OPTIONS.map((opt) => (
               <button
+                key={opt.type}
                 type="button"
-                key={slide.id}
-                className={
-                  slide.id === selected?.id ? 'thumb thumb--active' : 'thumb'
-                }
-                onClick={() => setSelectedId(slide.id)}
+                className="btn btn--full btn--add"
+                onClick={() => addSlide(opt.type)}
               >
-                <span className="thumb-canvas">
-                  <SlideRenderer slide={slide} project={project} width={104} thumbnail />
-                </span>
-                <span className="thumb-label">
-                  {i + 1}. {TYPE_LABEL[slide.type]}
-                </span>
+                <span>+ {opt.label}</span>
+                <small>{opt.hint}</small>
               </button>
             ))}
-          </div>
-          <div className="filmstrip-add">
-            <span className="panel-heading">Adicionar slide</span>
-            <button type="button" className="btn btn--small" onClick={() => addSlide('split')}>
-              + Tela partida
+          </section>
+
+          <section className="card">
+            <h2 className="card-title">Assinaturas do topo</h2>
+            <p className="hint">Aparecem em todos os slides.</p>
+            <label className="field">
+              <span>Esquerda</span>
+              <textarea
+                rows={2}
+                value={project.captionLeft}
+                onChange={(e) =>
+                  setProject((p) => ({ ...p, captionLeft: e.target.value }))
+                }
+              />
+            </label>
+            <label className="field">
+              <span>Direita</span>
+              <textarea
+                rows={2}
+                value={project.captionRight}
+                onChange={(e) =>
+                  setProject((p) => ({ ...p, captionRight: e.target.value }))
+                }
+              />
+            </label>
+          </section>
+
+          <section className="card">
+            <h2 className="card-title">Meus carrosséis</h2>
+            <button type="button" className="btn btn--full" onClick={() => void newCarousel()}>
+              + Novo carrossel
             </button>
-            <button type="button" className="btn btn--small" onClick={() => addSlide('comparison')}>
-              + Foto de fundo
-            </button>
-            <button type="button" className="btn btn--small" onClick={() => addSlide('development')}>
-              + Desenvolvimento
-            </button>
-            <button type="button" className="btn btn--small" onClick={() => addSlide('book')}>
-              + Livro / Oferta
-            </button>
-            <button type="button" className="btn btn--small" onClick={() => addSlide('final')}>
-              + Final (CTA)
-            </button>
-          </div>
+            {saved.length > 0 && (
+              <ul className="project-list">
+                {saved.map((s) => (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      className={
+                        s.id === projectId
+                          ? 'project-item project-item--active'
+                          : 'project-item'
+                      }
+                      onClick={() => void openCarousel(s.id)}
+                    >
+                      <span className="project-item-title">{s.title}</span>
+                      <span className="project-item-meta">
+                        {s.slideCount} slides · {formatWhen(s.updatedAt)}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-icon"
+                      title="Excluir este carrossel"
+                      aria-label={`Excluir ${s.title}`}
+                      onClick={() => void deleteCarousel(s.id)}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="hint">
+              Ficam salvos neste navegador. Pra levar pra outro aparelho, use o
+              backup abaixo.
+            </p>
+            <div className="control-row control-row--wrap">
+              <button type="button" className="btn btn--small" onClick={saveJson}>
+                Baixar backup
+              </button>
+              <FileButton
+                label="Abrir backup"
+                accept="application/json,.json"
+                onFile={(f) => void openJson(f)}
+                className="btn btn--small"
+              />
+            </div>
+          </section>
         </aside>
 
-        <main className="preview" ref={previewRef}>
+        {/* ============ CENTRO: o slide em tamanho grande ============ */}
+        <main className="stage" ref={previewRef}>
           {selected ? (
             <>
               <div className="preview-canvas">
@@ -523,10 +803,15 @@ export default function App() {
               )}
               <div className="preview-actions">
                 <button type="button" className="btn" onClick={exportPng}>
-                  Baixar PNG
+                  Baixar este slide (PNG)
                 </button>
-                <button type="button" className="btn" onClick={exportOverlay}>
-                  Arte transparente (PNG)
+                <button
+                  type="button"
+                  className="btn"
+                  title="PNG transparente só com os textos e a moldura, pra compor por cima de um vídeo em outro editor"
+                  onClick={exportOverlay}
+                >
+                  Arte transparente
                 </button>
                 {selectedHasVideo && (
                   <button type="button" className="btn btn--primary" onClick={exportVideo}>
@@ -534,70 +819,78 @@ export default function App() {
                   </button>
                 )}
               </div>
+              <p className="preview-hint">
+                Arte transparente = PNG sem as fotos, pra compor por cima de um
+                vídeo em outro editor.
+              </p>
             </>
           ) : (
-            <p className="preview-empty">Adicione um slide para começar.</p>
+            <p className="preview-empty">
+              Este carrossel está vazio. Use os botões de “Adicionar slide” para
+              começar.
+            </p>
           )}
         </main>
 
-        <aside className="panel">
+        {/* ============ DIREITA: o design do slide selecionado ============ */}
+        <aside className="panel panel--slide">
           {selected && (
-            <section className="panel-section">
-              <span className="panel-heading">
-                Slide {selectedIndex + 1} — {TYPE_LABEL[selected.type]}
-              </span>
+            <>
+              <div className="slide-panel-header">
+                <h2>
+                  Slide {selectedIndex + 1} de {project.slides.length}
+                </h2>
+                <span className="slide-type-badge">{TYPE_LABEL[selected.type]}</span>
+              </div>
 
               {'media' in selected && (
-                <div className="control-row control-row--wrap">
-                  <FileButton
-                    label={
-                      selected.type === 'book'
-                        ? selected.media
-                          ? 'Trocar imagem'
-                          : 'Adicionar imagem'
-                        : selected.media
-                          ? 'Trocar foto ou vídeo'
-                          : 'Adicionar foto ou vídeo'
-                    }
-                    accept={
-                      selected.type === 'book' ? 'image/*' : 'image/*,video/*'
-                    }
-                    onFile={(f) => void setSlideMediaFromFile(selected.id, 'media', f)}
-                  />
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => void pasteFromClipboard(selected.id, 'media')}
-                  >
-                    Colar imagem
-                  </button>
-                  {selected.media && (
+                <section className="card">
+                  <h2 className="card-title">
+                    {selected.type === 'book' ? 'Imagem' : 'Foto ou vídeo'}
+                  </h2>
+                  <div className="control-row control-row--wrap">
+                    <FileButton
+                      label={selected.media ? 'Trocar' : 'Enviar arquivo'}
+                      accept={selected.type === 'book' ? 'image/*' : 'image/*,video/*'}
+                      onFile={(f) => void setSlideMediaFromFile(selected.id, 'media', f)}
+                      className="btn btn--small"
+                    />
                     <button
                       type="button"
                       className="btn btn--small"
-                      onClick={() => applyMedia(selected.id, 'media', null)}
+                      title="Copiou uma imagem no Google? Cola direto aqui, sem baixar."
+                      onClick={() => void pasteFromClipboard(selected.id, 'media')}
                     >
-                      Remover
+                      Colar imagem
                     </button>
+                    {selected.media && (
+                      <button
+                        type="button"
+                        className="btn btn--small btn--danger"
+                        onClick={() => applyMedia(selected.id, 'media', null)}
+                      >
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                  {selectedHasVideo && (
+                    <p className="hint">
+                      Vídeos valem só nesta sessão (não ficam no projeto salvo).
+                      Exporte o vídeo pronto no botão abaixo do slide — sai com o
+                      áudio original.
+                    </p>
                   )}
-                </div>
-              )}
-              {selectedHasVideo && (
-                <p className="hint">
-                  Vídeos valem só nesta sessão do navegador (não ficam salvos no
-                  projeto). Exporte o vídeo pronto pelo botão abaixo do slide — ele
-                  sai com o áudio original do arquivo.
-                </p>
+                </section>
               )}
 
               {selected.type === 'split' &&
                 (['top', 'bottom'] as const).map((slot) => {
                   const half = (selected as SplitSlide)[slot]
                   return (
-                    <div key={slot} className="half-group">
-                      <span className="panel-subheading">
+                    <section key={slot} className="card">
+                      <h2 className="card-title">
                         {slot === 'top' ? 'Metade de cima' : 'Metade de baixo'}
-                      </span>
+                      </h2>
                       <div className="control-row control-row--wrap">
                         <FileButton
                           label={half.media ? 'Trocar' : 'Foto ou vídeo'}
@@ -608,6 +901,7 @@ export default function App() {
                         <button
                           type="button"
                           className="btn btn--small"
+                          title="Copiou uma imagem no Google? Cola direto aqui, sem baixar."
                           onClick={() => void pasteFromClipboard(selected.id, slot)}
                         >
                           Colar imagem
@@ -615,7 +909,7 @@ export default function App() {
                         {half.media && (
                           <button
                             type="button"
-                            className="btn btn--small"
+                            className="btn btn--small btn--danger"
                             onClick={() => applyMedia(selected.id, slot, null)}
                           >
                             Remover
@@ -639,24 +933,120 @@ export default function App() {
                           }
                         />
                       </label>
-                    </div>
+                    </section>
                   )
                 })}
 
-              {selected.type === 'comparison' && (
-                <>
-                  <label className="field">
-                    <span>Texto do slide</span>
-                    <textarea
-                      rows={3}
-                      value={(selected as ComparisonSlide).text}
-                      onChange={(e) =>
-                        updateSlide(selected.id, (s) => ({ ...s, text: e.target.value }))
-                      }
-                    />
-                  </label>
+              {(selected.type === 'comparison' ||
+                selected.type === 'development' ||
+                selected.type === 'book' ||
+                selected.type === 'final') && (
+                <section className="card">
+                  <h2 className="card-title">Texto</h2>
+                  {selected.type === 'comparison' && (
+                    <label className="field">
+                      <span>Frase do slide</span>
+                      <textarea
+                        rows={3}
+                        value={(selected as ComparisonSlide).text}
+                        onChange={(e) =>
+                          updateSlide(selected.id, (s) => ({ ...s, text: e.target.value }))
+                        }
+                      />
+                    </label>
+                  )}
+                  {selected.type === 'development' && (
+                    <>
+                      <label className="field">
+                        <span>Parágrafos (linha em branco separa)</span>
+                        <textarea
+                          rows={9}
+                          value={(selected as DevelopmentSlide).body}
+                          onChange={(e) =>
+                            updateSlide(selected.id, (s) => ({
+                              ...s,
+                              body: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Frase de fechamento (negrito)</span>
+                        <textarea
+                          rows={2}
+                          value={(selected as DevelopmentSlide).emphasis}
+                          onChange={(e) =>
+                            updateSlide(selected.id, (s) => ({
+                              ...s,
+                              emphasis: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
+                  {selected.type === 'book' && (
+                    <label className="field">
+                      <span>Parágrafos (linha em branco separa)</span>
+                      <textarea
+                        rows={7}
+                        value={(selected as BookSlide).body}
+                        onChange={(e) =>
+                          updateSlide(selected.id, (s) => ({ ...s, body: e.target.value }))
+                        }
+                      />
+                    </label>
+                  )}
+                  {selected.type === 'final' && (
+                    <label className="field">
+                      <span>Convite (“Me segue se…”)</span>
+                      <textarea
+                        rows={4}
+                        value={(selected as FinalSlide).text}
+                        onChange={(e) =>
+                          updateSlide(selected.id, (s) => ({ ...s, text: e.target.value }))
+                        }
+                      />
+                    </label>
+                  )}
+                  <p className="hint">**negrito** · *itálico* · _sublinhado_</p>
+                </section>
+              )}
+
+              <section className="card">
+                <h2 className="card-title">Ajustes</h2>
+                <div className="control-row">
+                  <span className="control-label">Tamanho do texto</span>
+                  <div className="stepper">
+                    <button
+                      type="button"
+                      className="btn btn--small"
+                      disabled={selected.sizeStep <= 0}
+                      onClick={() => stepSize(selected.id, -1)}
+                    >
+                      A−
+                    </button>
+                    <span className="stepper-dots">
+                      {Array.from({ length: SIZE_STEPS }, (_, i) => (
+                        <span
+                          key={i}
+                          className={i <= selected.sizeStep ? 'dot dot--on' : 'dot'}
+                        />
+                      ))}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn--small"
+                      disabled={selected.sizeStep >= SIZE_STEPS - 1}
+                      onClick={() => stepSize(selected.id, 1)}
+                    >
+                      A+
+                    </button>
+                  </div>
+                </div>
+                {selected.type === 'comparison' && (
                   <div className="control-row">
-                    <span className="control-label">Posição do texto</span>
+                    <span className="control-label">Posição da frase</span>
                     <div className="segmented">
                       <button
                         type="button"
@@ -692,184 +1082,89 @@ export default function App() {
                       </button>
                     </div>
                   </div>
-                </>
-              )}
-
-              {selected.type === 'development' && (
-                <>
-                  <label className="field">
-                    <span>Texto (linha em branco separa parágrafos)</span>
-                    <textarea
-                      rows={9}
-                      value={(selected as DevelopmentSlide).body}
-                      onChange={(e) =>
-                        updateSlide(selected.id, (s) => ({ ...s, body: e.target.value }))
-                      }
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Frase de fechamento (negrito)</span>
-                    <textarea
-                      rows={2}
-                      value={(selected as DevelopmentSlide).emphasis}
-                      onChange={(e) =>
-                        updateSlide(selected.id, (s) => ({
-                          ...s,
-                          emphasis: e.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                </>
-              )}
-
-              {selected.type === 'book' && (
-                <label className="field">
-                  <span>Texto (linha em branco separa parágrafos)</span>
-                  <textarea
-                    rows={8}
-                    value={(selected as BookSlide).body}
-                    onChange={(e) =>
-                      updateSlide(selected.id, (s) => ({ ...s, body: e.target.value }))
-                    }
-                  />
-                </label>
-              )}
-
-              {selected.type === 'final' && (
-                <label className="field">
-                  <span>Texto do convite (“Me segue se…”)</span>
-                  <textarea
-                    rows={4}
-                    value={(selected as FinalSlide).text}
-                    onChange={(e) =>
-                      updateSlide(selected.id, (s) => ({ ...s, text: e.target.value }))
-                    }
-                  />
-                </label>
-              )}
-
-              <div className="control-row">
-                <span className="control-label">Tamanho do texto</span>
-                <div className="stepper">
+                )}
+                <div className="control-row control-row--wrap">
                   <button
                     type="button"
                     className="btn btn--small"
-                    disabled={selected.sizeStep <= 0}
-                    onClick={() => stepSize(selected.id, -1)}
+                    onClick={() => duplicateSlide(selected.id)}
                   >
-                    A−
+                    Duplicar slide
                   </button>
-                  <span className="stepper-dots">
-                    {Array.from({ length: SIZE_STEPS }, (_, i) => (
-                      <span
-                        key={i}
-                        className={i <= selected.sizeStep ? 'dot dot--on' : 'dot'}
-                      />
-                    ))}
-                  </span>
                   <button
                     type="button"
-                    className="btn btn--small"
-                    disabled={selected.sizeStep >= SIZE_STEPS - 1}
-                    onClick={() => stepSize(selected.id, 1)}
+                    className="btn btn--small btn--danger"
+                    onClick={() => removeSlide(selected.id)}
                   >
-                    A+
+                    Excluir slide
                   </button>
                 </div>
-              </div>
-
-              <div className="control-row control-row--wrap">
-                <button
-                  type="button"
-                  className="btn btn--small"
-                  disabled={selectedIndex <= 0}
-                  onClick={() => moveSlide(selected.id, -1)}
-                >
-                  Mover pra trás
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--small"
-                  disabled={selectedIndex >= project.slides.length - 1}
-                  onClick={() => moveSlide(selected.id, 1)}
-                >
-                  Mover pra frente
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--small"
-                  onClick={() => duplicateSlide(selected.id)}
-                >
-                  Duplicar
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--small btn--danger"
-                  onClick={() => removeSlide(selected.id)}
-                >
-                  Excluir
-                </button>
-              </div>
-
-              <p className="hint">
-                Formatação nos textos: **negrito**, *itálico*, _sublinhado_.
-              </p>
-            </section>
+              </section>
+            </>
           )}
-
-          <section className="panel-section">
-            <span className="panel-heading">Identidade (todos os slides)</span>
-            <div className="control-row">
-              <span className="control-label">Alinhamento do texto</span>
-              <div className="segmented">
-                <button
-                  type="button"
-                  className={project.align === 'left' ? 'seg seg--active' : 'seg'}
-                  onClick={() => setProject((p) => ({ ...p, align: 'left' }))}
-                >
-                  Esquerda
-                </button>
-                <button
-                  type="button"
-                  className={project.align === 'center' ? 'seg seg--active' : 'seg'}
-                  onClick={() => setProject((p) => ({ ...p, align: 'center' }))}
-                >
-                  Centro
-                </button>
-              </div>
-            </div>
-            <p className="hint">
-              Vale pro carrossel inteiro: ou tudo à esquerda, ou tudo no centro —
-              nunca misturado.
-            </p>
-            <label className="field">
-              <span>Assinatura do topo — esquerda</span>
-              <textarea
-                rows={2}
-                value={project.captionLeft}
-                onChange={(e) =>
-                  setProject((p) => ({ ...p, captionLeft: e.target.value }))
-                }
-              />
-            </label>
-            <label className="field">
-              <span>Assinatura do topo — direita</span>
-              <textarea
-                rows={2}
-                value={project.captionRight}
-                onChange={(e) =>
-                  setProject((p) => ({ ...p, captionRight: e.target.value }))
-                }
-              />
-            </label>
-          </section>
         </aside>
       </div>
 
+      {/* ============ EMBAIXO: todos os slides do carrossel ============ */}
+      <footer className="filmstrip" ref={filmstripRef}>
+        {project.slides.map((slide, i) => {
+          const active = slide.id === selected?.id
+          return (
+            <div key={slide.id} className={active ? 'thumb thumb--active' : 'thumb'}>
+              <button
+                type="button"
+                className="thumb-hit"
+                onClick={() => setSelectedId(slide.id)}
+                aria-label={`Slide ${i + 1}: ${TYPE_LABEL[slide.type]}`}
+              >
+                <span className="thumb-canvas">
+                  <SlideRenderer slide={slide} project={project} width={92} thumbnail />
+                </span>
+                <span className="thumb-label">
+                  {i + 1} · {TYPE_LABEL[slide.type]}
+                </span>
+              </button>
+              {active && (
+                <span className="thumb-move">
+                  <button
+                    type="button"
+                    className="btn-icon"
+                    title="Mover pra trás"
+                    disabled={i === 0}
+                    onClick={() => moveSlide(slide.id, -1)}
+                  >
+                    ◀
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-icon"
+                    title="Mover pra frente"
+                    disabled={i === project.slides.length - 1}
+                    onClick={() => moveSlide(slide.id, 1)}
+                  >
+                    ▶
+                  </button>
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </footer>
+
       {busy && (
         <div className="busy-overlay">
-          <div className="busy-card">{busy}</div>
+          <div className="busy-card">
+            <p className="busy-text">{busy}</p>
+            {cancelRef.current && (
+              <button
+                type="button"
+                className="btn btn--small"
+                onClick={() => cancelRef.current?.abort()}
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

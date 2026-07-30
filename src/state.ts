@@ -17,13 +17,18 @@ import { DEFAULT_STEP } from './components/SlideRenderer'
 const LEGACY_STORAGE_KEY = 'criador-carrosseis-v1'
 const DB_NAME = 'criador-carrosseis'
 const DB_STORE = 'projetos'
-const DB_KEY = 'atual'
+// Resumos ficam num store separado: listar carrosséis não pode pagar o preço
+// de desserializar todas as fotos de todos os projetos.
+const DB_META = 'resumos'
+const DB_VERSION = 2
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1)
+    const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(DB_STORE)
+      const db = req.result
+      if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE)
+      if (!db.objectStoreNames.contains(DB_META)) db.createObjectStore(DB_META)
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
@@ -120,7 +125,7 @@ export function defaultProject(): Project {
 
   const dev = makeSlide('development') as DevelopmentSlide
   dev.body =
-    'Aqui entra o desenvolvimento: você conecta os dados que acabou de mostrar e explica o que eles significam juntos. É a parte mais densa do carrossel — e é por isso que ela funciona.\n\nEscreva em parágrafos curtos, de duas ou três linhas. A pessoa está lendo no celular, com o dedo pronto pra deslizar: cada parágrafo precisa pagar a atenção que pede.\n\nTraga o contexto que as fotos não contam: de onde saíram os números, o que aconteceu antes, quem decidiu o quê. Use **negrito** pra dar peso, *itálico* pra citações e _sublinhado_ pra destacar.'
+    'Aqui entra o desenvolvimento: você conecta os dados que mostrou e explica o que eles significam juntos. Parágrafos curtos, de duas ou três linhas — a pessoa lê no celular, com o dedo pronto pra deslizar.\n\nTraga o contexto que as fotos não contam: de onde saíram os números, quem decidiu o quê. Use **negrito**, *itálico* e _sublinhado_.'
   dev.emphasis = 'A conclusão forte fecha em negrito.'
 
   const book = makeSlide('book') as BookSlide
@@ -141,10 +146,61 @@ export function defaultProject(): Project {
   const fin = makeSlide('final') as FinalSlide
 
   return {
+    title: 'Meu primeiro carrossel',
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
-    align: 'left',
     slides: [...splits, dev, book, photo1, split5, photo2, fin],
+  }
+}
+
+/**
+ * Estrutura do método com os textos em branco: é o que "+ Novo carrossel"
+ * cria. O baralho-tutorial (defaultProject) aparece só na primeira visita.
+ */
+export function blankProject(captions?: {
+  captionLeft: string
+  captionRight: string
+}): Project {
+  const structure: SlideType[] = [
+    'split',
+    'split',
+    'split',
+    'split',
+    'development',
+    'book',
+    'comparison',
+    'split',
+    'comparison',
+    'final',
+  ]
+  const slides = structure.map((t) => {
+    const s = makeSlide(t)
+    switch (s.type) {
+      case 'split':
+        s.top.text = ''
+        s.bottom.text = ''
+        break
+      case 'comparison':
+        s.text = ''
+        break
+      case 'development':
+        s.body = ''
+        s.emphasis = ''
+        break
+      case 'book':
+        s.body = ''
+        break
+      case 'final':
+        s.text = ''
+        break
+    }
+    return s
+  })
+  return {
+    title: 'Novo carrossel',
+    captionLeft: captions?.captionLeft ?? '',
+    captionRight: captions?.captionRight ?? '',
+    slides,
   }
 }
 
@@ -170,54 +226,223 @@ function stripVolatileMedia(project: Project): Project {
   }
 }
 
-/** Retorna false quando o rascunho não pôde ser salvo no navegador. */
-export async function saveProjectToStorage(project: Project): Promise<boolean> {
+// ---------------------------------------------------------------------------
+// Vários carrosséis, tudo no navegador da pessoa (IndexedDB) — sem servidor.
+// Cada registro é { id, updatedAt, data: Project }, chaveado pelo id.
+// A chave especial CURRENT_KEY guarda o id do carrossel aberto.
+// ---------------------------------------------------------------------------
+
+export interface ProjectSummary {
+  id: string
+  title: string
+  updatedAt: number
+  slideCount: number
+}
+
+interface StoredRecord {
+  id: string
+  updatedAt: number
+  data: unknown
+}
+
+const CURRENT_KEY = '__carrossel-atual'
+const LEGACY_DB_KEY = 'atual'
+
+function txDone(tx: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+    tx.onabort = () => reject(tx.error)
+  })
+}
+
+function reqResult<T>(req: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+/** Retorna false quando o carrossel não pôde ser salvo no navegador. */
+export async function saveProjectToStorage(
+  id: string,
+  project: Project,
+): Promise<boolean> {
   try {
     // structuredClone via JSON garante objeto puro pro IndexedDB
-    const data = JSON.parse(JSON.stringify(stripVolatileMedia(project)))
+    const record: StoredRecord = {
+      id,
+      updatedAt: Date.now(),
+      data: JSON.parse(JSON.stringify(stripVolatileMedia(project))),
+    }
+    const summary: ProjectSummary = {
+      id,
+      title: project.title.trim() || 'Carrossel sem título',
+      updatedAt: record.updatedAt,
+      slideCount: project.slides.length,
+    }
     const db = await openDb()
     try {
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(DB_STORE, 'readwrite')
-        tx.objectStore(DB_STORE).put(data, DB_KEY)
-        tx.oncomplete = () => resolve()
-        tx.onerror = () => reject(tx.error)
-        tx.onabort = () => reject(tx.error)
-      })
+      const tx = db.transaction([DB_STORE, DB_META], 'readwrite')
+      tx.objectStore(DB_STORE).put(record, id)
+      tx.objectStore(DB_STORE).put(id, CURRENT_KEY)
+      tx.objectStore(DB_META).put(summary, id)
+      await txDone(tx)
     } finally {
       db.close()
     }
     return true
   } catch {
-    // O projeto continua em memória; o app avisa e o usuário pode usar
-    // "Baixar projeto" (.json).
+    // O projeto continua em memória; o app avisa e a pessoa pode usar
+    // "Baixar backup" (.json).
     return false
   }
 }
 
-export async function loadProjectFromStorage(): Promise<Project | null> {
+export async function loadProject(id: string): Promise<Project | null> {
   try {
     const db = await openDb()
-    let data: unknown
     try {
-      data = await new Promise((resolve, reject) => {
-        const tx = db.transaction(DB_STORE, 'readonly')
-        const req = tx.objectStore(DB_STORE).get(DB_KEY)
-        req.onsuccess = () => resolve(req.result)
-        req.onerror = () => reject(req.error)
-      })
+      const tx = db.transaction(DB_STORE, 'readonly')
+      const record = await reqResult(tx.objectStore(DB_STORE).get(id))
+      if (typeof record === 'object' && record !== null && 'data' in record) {
+        return normalizeProject((record as StoredRecord).data)
+      }
+      return null
     } finally {
       db.close()
     }
-    if (data) return normalizeProject(data)
-    // Migração: rascunho antigo salvo no localStorage
-    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
-    if (legacy) {
-      const project = normalizeProject(JSON.parse(legacy))
+  } catch {
+    return null
+  }
+}
+
+export async function deleteProjectFromStorage(id: string): Promise<void> {
+  try {
+    const db = await openDb()
+    try {
+      const tx = db.transaction([DB_STORE, DB_META], 'readwrite')
+      tx.objectStore(DB_STORE).delete(id)
+      tx.objectStore(DB_META).delete(id)
+      await txDone(tx)
+    } finally {
+      db.close()
+    }
+  } catch {
+    // sem drama: a lista simplesmente continua mostrando o item
+  }
+}
+
+function sanitizeSummary(v: unknown): ProjectSummary | null {
+  if (typeof v !== 'object' || v === null) return null
+  const s = v as ProjectSummary
+  if (typeof s.id !== 'string' || s.id === '') return null
+  return {
+    id: s.id,
+    title: typeof s.title === 'string' && s.title.trim() !== '' ? s.title : 'Carrossel sem título',
+    updatedAt: typeof s.updatedAt === 'number' ? s.updatedAt : 0,
+    slideCount: typeof s.slideCount === 'number' ? s.slideCount : 0,
+  }
+}
+
+export async function listProjects(): Promise<ProjectSummary[]> {
+  try {
+    const db = await openDb()
+    try {
+      const metaTx = db.transaction(DB_META, 'readonly')
+      const metas = await reqResult(metaTx.objectStore(DB_META).getAll())
+      const summaries = metas
+        .map(sanitizeSummary)
+        .filter((s): s is ProjectSummary => s !== null)
+      if (summaries.length > 0) {
+        summaries.sort((a, b) => b.updatedAt - a.updatedAt)
+        return summaries
+      }
+      // Dados de versões anteriores (sem o store de resumos): reconstrói uma
+      // vez a partir dos projetos completos e preenche os resumos.
+      const tx = db.transaction(DB_STORE, 'readonly')
+      const values = await reqResult(tx.objectStore(DB_STORE).getAll())
+      const rebuilt: ProjectSummary[] = []
+      for (const v of values) {
+        if (typeof v !== 'object' || v === null || !('data' in v)) continue
+        const rec = v as StoredRecord
+        const data = rec.data as Partial<Project> | null
+        if (!data || !Array.isArray(data.slides)) continue
+        rebuilt.push({
+          id: rec.id,
+          title:
+            typeof data.title === 'string' && data.title.trim() !== ''
+              ? data.title
+              : 'Carrossel sem título',
+          updatedAt: typeof rec.updatedAt === 'number' ? rec.updatedAt : 0,
+          slideCount: data.slides.length,
+        })
+      }
+      if (rebuilt.length > 0) {
+        const backfill = db.transaction(DB_META, 'readwrite')
+        for (const s of rebuilt) backfill.objectStore(DB_META).put(s, s.id)
+        await txDone(backfill).catch(() => {})
+      }
+      rebuilt.sort((a, b) => b.updatedAt - a.updatedAt)
+      return rebuilt
+    } finally {
+      db.close()
+    }
+  } catch {
+    return []
+  }
+}
+
+/** Carrega o carrossel aberto por último, migrando rascunhos antigos. */
+export async function loadCurrentProject(): Promise<{
+  id: string
+  project: Project
+} | null> {
+  try {
+    const db = await openDb()
+    let currentId: unknown
+    let record: unknown
+    let legacyRecord: unknown
+    try {
+      const tx = db.transaction(DB_STORE, 'readonly')
+      const store = tx.objectStore(DB_STORE)
+      currentId = await reqResult(store.get(CURRENT_KEY))
+      if (typeof currentId === 'string') {
+        record = await reqResult(store.get(currentId))
+      }
+      legacyRecord = await reqResult(store.get(LEGACY_DB_KEY))
+    } finally {
+      db.close()
+    }
+
+    if (
+      typeof currentId === 'string' &&
+      typeof record === 'object' &&
+      record !== null &&
+      'data' in record
+    ) {
+      const project = normalizeProject((record as StoredRecord).data)
+      if (project) return { id: currentId, project }
+    }
+
+    // Migração: rascunho único das versões anteriores (IndexedDB ou localStorage)
+    const legacyData =
+      legacyRecord ??
+      (() => {
+        const raw = localStorage.getItem(LEGACY_STORAGE_KEY)
+        return raw ? (JSON.parse(raw) as unknown) : null
+      })()
+    if (legacyData) {
+      const project = normalizeProject(legacyData)
       if (project) {
-        void saveProjectToStorage(project)
-        localStorage.removeItem(LEGACY_STORAGE_KEY)
-        return project
+        const id = newId()
+        // Só apaga o rascunho antigo depois de confirmar que o novo gravou.
+        const saved = await saveProjectToStorage(id, project)
+        if (saved) {
+          localStorage.removeItem(LEGACY_STORAGE_KEY)
+          await deleteProjectFromStorage(LEGACY_DB_KEY)
+        }
+        return { id, project }
       }
     }
     return null
@@ -301,11 +526,15 @@ export function normalizeProject(data: unknown): Project | null {
     }
     slides.push(merged)
   }
-  if (slides.length === 0) return null
+  // Carrossel sem nenhum slide é válido (a pessoa pode ter excluído todos):
+  // só recusa quando o arquivo nem tinha uma lista de slides utilizável.
   return {
+    title:
+      typeof p.title === 'string' && p.title.trim() !== ''
+        ? p.title
+        : 'Carrossel sem título',
     captionLeft: typeof p.captionLeft === 'string' ? p.captionLeft : '',
     captionRight: typeof p.captionRight === 'string' ? p.captionRight : '',
-    align: p.align === 'center' ? 'center' : 'left',
     slides,
   }
 }

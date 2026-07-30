@@ -3,13 +3,17 @@
    ============================================================ */
 
 :root {
-  --bg: #131313;
-  --panel: #1c1c1c;
-  --panel-2: #232323;
+  --bg: #121212;
+  --panel: #1a1a1a;
+  --card: #202020;
+  --card-2: #282828;
   --border: #333;
+  --border-soft: #2a2a2a;
   --text: #ece9e2;
   --text-dim: #9b978e;
   --accent: #e4dccb;
+  --danger: #e2938c;
+  --warn: #e8b46a;
 }
 
 * {
@@ -36,6 +40,14 @@ body {
   flex-direction: column;
 }
 
+.app--loading {
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+}
+
+/* --- topo --- */
+
 .topbar {
   display: flex;
   align-items: center;
@@ -49,7 +61,7 @@ body {
 
 .topbar-title h1 {
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 650;
   letter-spacing: 0.01em;
 }
@@ -59,149 +71,59 @@ body {
   font-size: 12px;
 }
 
-.topbar-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.save-status {
+  font-size: 12px;
+  color: var(--text-dim);
 }
+
+.save-status--error {
+  color: var(--warn);
+}
+
+/* --- área de trabalho: projeto | slide grande | design do slide --- */
 
 .workspace {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 190px 1fr 340px;
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
 }
 
-/* itens de grid/flex não podem alargar a página além da tela */
 .workspace > * {
   min-width: 0;
 }
 
-/* --- filmstrip --- */
-
-.filmstrip {
-  border-right: 1px solid var(--border);
+.panel {
   background: var(--panel);
+  overflow-y: auto;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  gap: 12px;
 }
 
-.filmstrip-list {
-  flex: 1;
-  overflow-y: auto;
+.panel--project {
+  border-right: 1px solid var(--border);
+}
+
+.panel--slide {
+  border-left: 1px solid var(--border);
+}
+
+/* --- cartões: cada grupo de função é um bloco com título --- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.thumb {
-  background: none;
-  border: 2px solid transparent;
-  border-radius: 10px;
-  padding: 6px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  color: var(--text-dim);
-  font: inherit;
-}
-
-.thumb:hover {
-  border-color: var(--border);
-}
-
-.thumb--active {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.thumb-canvas {
-  display: block;
-  border-radius: 6px;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.thumb-label {
-  font-size: 11px;
-}
-
-.filmstrip-add {
-  border-top: 1px solid var(--border);
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* --- preview --- */
-
-.preview {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 18px;
-}
-
-.preview-canvas {
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
-}
-
-.preview-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.preview-empty {
-  color: var(--text-dim);
-}
-
-.overflow-warning {
+.card-title {
   margin: 0;
-  max-width: 460px;
-  text-align: center;
-  font-size: 13px;
-  color: #e8b46a;
-}
-
-.warn-badge {
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-  color: #e8b46a;
-}
-
-/* --- painel direito --- */
-
-.panel {
-  border-left: 1px solid var(--border);
-  background: var(--panel);
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-.panel-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.panel-heading {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.09em;
@@ -209,25 +131,31 @@ body {
   color: var(--text-dim);
 }
 
-.panel-subheading {
-  font-size: 12px;
-  font-weight: 650;
-  color: var(--text);
-}
-
-.half-group {
+.slide-panel-header {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--panel-2);
+  padding: 2px 2px 0;
 }
 
-.half-group .field textarea {
-  background: var(--panel);
+.slide-panel-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
 }
+
+.slide-type-badge {
+  font-size: 11px;
+  font-weight: 650;
+  color: #171717;
+  background: var(--accent);
+  border-radius: 20px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+/* --- campos --- */
 
 .field {
   display: flex;
@@ -240,18 +168,21 @@ body {
   color: var(--text-dim);
 }
 
-.field textarea {
+.field textarea,
+.field input[type='text'] {
   resize: vertical;
-  background: var(--panel-2);
+  background: var(--card-2);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
   padding: 8px 10px;
   font: inherit;
   line-height: 1.45;
+  width: 100%;
 }
 
-.field textarea:focus {
+.field textarea:focus,
+.field input[type='text']:focus {
   outline: none;
   border-color: var(--accent);
 }
@@ -282,7 +213,7 @@ body {
 /* --- botões --- */
 
 .btn {
-  background: var(--panel-2);
+  background: var(--card-2);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
@@ -302,6 +233,15 @@ body {
   cursor: default;
 }
 
+.btn:focus-visible,
+.btn-icon:focus-visible,
+.seg:focus-visible,
+.project-item:focus-visible,
+.thumb-hit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .btn--primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -314,9 +254,56 @@ body {
   font-size: 12px;
 }
 
+.btn--full {
+  width: 100%;
+}
+
 .btn--danger:hover:not(:disabled) {
   border-color: #b4574f;
-  color: #e2938c;
+  color: var(--danger);
+}
+
+/* botão de adicionar slide: nome + descrição curta */
+.btn--add {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+
+.btn--add small {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-icon {
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.btn-icon:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .segmented {
@@ -327,7 +314,7 @@ body {
 }
 
 .seg {
-  background: var(--panel-2);
+  background: var(--card-2);
   border: none;
   color: var(--text-dim);
   padding: 6px 12px;
@@ -364,6 +351,163 @@ body {
   background: var(--accent);
 }
 
+/* --- lista "Meus carrosséis" --- */
+
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.project-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.project-item:hover {
+  border-color: var(--accent);
+}
+
+.project-item--active {
+  border-color: var(--accent);
+  background: var(--card);
+}
+
+.project-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-item-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* --- palco central --- */
+
+.stage {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 18px;
+}
+
+.preview-canvas {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+
+.preview-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.preview-empty {
+  color: var(--text-dim);
+}
+
+.overflow-warning {
+  margin: 0;
+  max-width: 460px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--warn);
+}
+
+/* --- filme de slides embaixo --- */
+
+.filmstrip {
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  overflow-x: auto;
+  align-items: flex-start;
+  flex-shrink: 0;
+}
+
+.thumb {
+  position: relative;
+  flex: 0 0 auto;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.thumb--active {
+  border-color: var(--accent);
+}
+
+.thumb-hit {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+  font: inherit;
+}
+
+.thumb--active .thumb-hit {
+  color: var(--text);
+}
+
+.thumb-canvas {
+  display: block;
+  border-radius: 5px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.thumb-label {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* setas de reordenar ficam ABAIXO da miniatura, nunca sobre a arte */
+.thumb-move {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
 .busy-overlay {
   position: fixed;
   inset: 0;
@@ -372,6 +516,7 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 50;
+  padding: 20px;
 }
 
 .busy-card {
@@ -380,41 +525,72 @@ body {
   border-radius: 12px;
   padding: 18px 26px;
   font-size: 14px;
+  max-width: 460px;
+  text-align: center;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
 }
 
-@media (max-width: 980px) {
-  .workspace {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
-    overflow-y: auto;
-  }
+.busy-text {
+  margin: 0;
+}
+
+.preview-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  max-width: 440px;
+}
+
+/* --- celular: preview primeiro, slide depois, projeto no fim --- */
+
+@media (max-width: 1020px) {
   .app {
     height: auto;
     min-height: 100vh;
   }
-  .filmstrip {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
+  .workspace {
+    display: flex;
+    flex-direction: column;
   }
-  .filmstrip-list {
-    flex-direction: row;
-    overflow-x: auto;
+  .stage {
+    order: 1;
+    min-height: 62vh;
   }
-  .thumb {
-    flex: 0 0 auto;
-  }
-  .panel {
+  .panel--slide {
+    order: 2;
     border-left: none;
     border-top: 1px solid var(--border);
   }
-  .preview {
-    min-height: 70vh;
+  .panel--project {
+    order: 3;
+    border-right: none;
+    border-top: 1px solid var(--border);
+  }
+  .filmstrip {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+  }
+  /* iOS dá zoom automático em campo com fonte < 16px */
+  .field textarea,
+  .field input[type='text'] {
+    font-size: 16px;
   }
 }
 
 /* ============================================================
    O slide em si (desenhado em 1080x1350 e escalado)
    Estes estilos são a identidade fixa do formato.
+
+   Diagramação por tipo:
+   - comparação (tela partida e foto de fundo): sempre CENTRALIZADA
+   - desenvolvimento: coluna à DIREITA, texto alinhado à esquerda
+   - livro e final: texto alinhado à esquerda
    ============================================================ */
 
 .sl-scale-outer {
@@ -440,16 +616,6 @@ body {
   background: transparent;
 }
 
-/* Alinhamento é UMA decisão pro carrossel inteiro: todos os blocos de texto
-   herdam daqui — nunca misturado (princípio básico de diagramação). */
-.sl-align--center {
-  text-align: center;
-}
-
-.sl-align--left {
-  text-align: left;
-}
-
 /* moldura tracejada */
 .sl-frame {
   position: absolute;
@@ -469,6 +635,7 @@ body {
   line-height: 1.4;
   letter-spacing: 0.07em;
   text-transform: uppercase;
+  text-align: center;
   color: rgba(255, 255, 255, 0.92);
   white-space: pre-line;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
@@ -570,6 +737,7 @@ body {
   left: 90px;
   right: 90px;
   bottom: 52px;
+  text-align: center;
   color: #fff;
   line-height: 1.3;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.55);
@@ -609,11 +777,12 @@ body {
   padding: 30px;
 }
 
-/* comparação */
+/* foto de fundo (comparação): frase centralizada */
 .sl-comp-text {
   position: absolute;
   left: 85px;
   right: 85px;
+  text-align: center;
   color: #fff;
   line-height: 1.3;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55);
@@ -628,14 +797,17 @@ body {
   top: 150px;
 }
 
-/* desenvolvimento: bloco de texto ancorado embaixo, como no formato */
+/* desenvolvimento: coluna à direita, texto à esquerda, ancorado embaixo */
 .sl-dev {
   position: absolute;
-  inset: 0;
+  left: 420px;
+  right: 95px;
+  top: 160px;
+  bottom: 150px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 160px 120px 170px;
+  text-align: left;
   color: #f0ede7;
   line-height: 1.5;
 }
@@ -654,7 +826,7 @@ body {
   margin-bottom: 0;
 }
 
-/* livro / oferta */
+/* livro / oferta: imagem centralizada, texto à esquerda */
 .sl-book {
   position: absolute;
   inset: 0;
@@ -664,6 +836,7 @@ body {
   justify-content: center;
   gap: 60px;
   padding: 150px 120px;
+  text-align: left;
   color: #f0ede7;
   line-height: 1.5;
 }
@@ -702,7 +875,7 @@ body {
   margin-bottom: 0;
 }
 
-/* final */
+/* final: texto à esquerda, foto à direita */
 .sl-final-media {
   position: absolute;
   top: 0;
@@ -729,6 +902,7 @@ body {
   width: 480px;
   top: 50%;
   transform: translateY(-50%);
+  text-align: left;
   color: #fff;
   line-height: 1.32;
 }
