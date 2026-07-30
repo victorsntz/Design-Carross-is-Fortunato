@@ -6,7 +6,9 @@ import type {
   FinalSlide,
   Project,
   Slide,
+  SlideMedia,
   SlideType,
+  SplitSlide,
 } from './types'
 import { SlideRenderer, SIZE_STEPS } from './components/SlideRenderer'
 import {
@@ -17,21 +19,26 @@ import {
   normalizeProject,
   saveProjectToStorage,
 } from './state'
-import { fileToMedia } from './media'
+import { clipboardToMedia, fileToMedia } from './media'
 import {
   downloadBlob,
   exportAllPngZip,
   exportOverlayPng,
   exportSlidePng,
   exportSlideVideo,
+  slideHasVideo,
 } from './export'
 
 const TYPE_LABEL: Record<SlideType, string> = {
-  comparison: 'Comparação',
+  split: 'Tela partida',
+  comparison: 'Foto de fundo',
   development: 'Desenvolvimento',
   book: 'Livro / Oferta',
   final: 'Final (CTA)',
 }
+
+/** Onde uma mídia entra num slide: no espaço único ou numa das metades. */
+type MediaSlot = 'media' | 'top' | 'bottom'
 
 function FileButton({
   label,
@@ -162,14 +169,63 @@ export default function App() {
     })
   }
 
-  async function setSlideMedia(id: string, file: File) {
+  function applyMedia(id: string, slot: MediaSlot, media: SlideMedia | null) {
+    updateSlide(id, (s) => {
+      if (s.type === 'split' && (slot === 'top' || slot === 'bottom')) {
+        return { ...s, [slot]: { ...s[slot], media } } as Slide
+      }
+      if (slot === 'media' && 'media' in s) {
+        return { ...s, media } as Slide
+      }
+      return s
+    })
+  }
+
+  async function setSlideMediaFromFile(id: string, slot: MediaSlot, file: File) {
     try {
-      const media = await fileToMedia(file)
-      updateSlide(id, (s) => ('media' in s ? ({ ...s, media } as Slide) : s))
+      applyMedia(id, slot, await fileToMedia(file))
     } catch (err) {
       window.alert(err instanceof Error ? err.message : 'Falha ao carregar o arquivo.')
     }
   }
+
+  async function pasteFromClipboard(id: string, slot: MediaSlot) {
+    try {
+      applyMedia(id, slot, await clipboardToMedia())
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Falha ao colar a imagem.')
+    }
+  }
+
+  // Ctrl+V / Cmd+V em qualquer lugar (fora dos campos de texto) cola a
+  // imagem copiada no primeiro espaço livre do slide selecionado.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
+        return
+      }
+      const item = Array.from(e.clipboardData?.items ?? []).find((i) =>
+        i.type.startsWith('image/'),
+      )
+      if (!item) return
+      const file = item.getAsFile()
+      if (!file) return
+      const current = project.slides.find((s) => s.id === selectedId) ?? project.slides[0]
+      if (!current) return
+      let slot: MediaSlot | null = null
+      if (current.type === 'split') {
+        slot = !current.top.media ? 'top' : !current.bottom.media ? 'bottom' : 'top'
+      } else if ('media' in current) {
+        slot = 'media'
+      }
+      if (!slot) return
+      e.preventDefault()
+      void setSlideMediaFromFile(current.id, slot, file)
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  })
 
   function stepSize(id: string, delta: -1 | 1) {
     updateSlide(id, (s) => ({
@@ -251,8 +307,7 @@ export default function App() {
     setSelectedId(fresh.slides[0].id)
   }
 
-  const selectedHasVideo =
-    selected && 'media' in selected && selected.media?.kind === 'video'
+  const selectedHasVideo = selected ? slideHasVideo(selected) : false
 
   return (
     <div className="app">
@@ -298,8 +353,11 @@ export default function App() {
           </div>
           <div className="filmstrip-add">
             <span className="panel-heading">Adicionar slide</span>
+            <button type="button" className="btn btn--small" onClick={() => addSlide('split')}>
+              + Tela partida
+            </button>
             <button type="button" className="btn btn--small" onClick={() => addSlide('comparison')}>
-              + Comparação
+              + Foto de fundo
             </button>
             <button type="button" className="btn btn--small" onClick={() => addSlide('development')}>
               + Desenvolvimento
@@ -352,19 +410,22 @@ export default function App() {
                     accept={
                       selected.type === 'book' ? 'image/*' : 'image/*,video/*'
                     }
-                    onFile={(f) => void setSlideMedia(selected.id, f)}
+                    onFile={(f) => void setSlideMediaFromFile(selected.id, 'media', f)}
                   />
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => void pasteFromClipboard(selected.id, 'media')}
+                  >
+                    Colar imagem
+                  </button>
                   {selected.media && (
                     <button
                       type="button"
                       className="btn btn--small"
-                      onClick={() =>
-                        updateSlide(selected.id, (s) =>
-                          'media' in s ? ({ ...s, media: null } as Slide) : s,
-                        )
-                      }
+                      onClick={() => applyMedia(selected.id, 'media', null)}
                     >
-                      Remover mídia
+                      Remover
                     </button>
                   )}
                 </div>
@@ -375,6 +436,59 @@ export default function App() {
                   projeto). Exporte o vídeo pronto pelo botão abaixo do slide.
                 </p>
               )}
+
+              {selected.type === 'split' &&
+                (['top', 'bottom'] as const).map((slot) => {
+                  const half = (selected as SplitSlide)[slot]
+                  return (
+                    <div key={slot} className="half-group">
+                      <span className="panel-subheading">
+                        {slot === 'top' ? 'Metade de cima' : 'Metade de baixo'}
+                      </span>
+                      <div className="control-row control-row--wrap">
+                        <FileButton
+                          label={half.media ? 'Trocar' : 'Foto ou vídeo'}
+                          accept="image/*,video/*"
+                          onFile={(f) => void setSlideMediaFromFile(selected.id, slot, f)}
+                          className="btn btn--small"
+                        />
+                        <button
+                          type="button"
+                          className="btn btn--small"
+                          onClick={() => void pasteFromClipboard(selected.id, slot)}
+                        >
+                          Colar imagem
+                        </button>
+                        {half.media && (
+                          <button
+                            type="button"
+                            className="btn btn--small"
+                            onClick={() => applyMedia(selected.id, slot, null)}
+                          >
+                            Remover
+                          </button>
+                        )}
+                      </div>
+                      <label className="field">
+                        <span>Texto</span>
+                        <textarea
+                          rows={2}
+                          value={half.text}
+                          onChange={(e) =>
+                            updateSlide(selected.id, (s) =>
+                              s.type === 'split'
+                                ? ({
+                                    ...s,
+                                    [slot]: { ...s[slot], text: e.target.value },
+                                  } as Slide)
+                                : s,
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                  )
+                })}
 
               {selected.type === 'comparison' && (
                 <>

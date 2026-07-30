@@ -16,38 +16,53 @@ export function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 30_000)
 }
 
-function slideMedia(slide: Slide): SlideMedia | null {
-  return 'media' in slide ? slide.media : null
+/** O slide tem algum vídeo (em qualquer espaço de mídia)? */
+export function slideHasVideo(slide: Slide): boolean {
+  if (slide.type === 'split') {
+    return (
+      slide.top.media?.kind === 'video' || slide.bottom.media?.kind === 'video'
+    )
+  }
+  return 'media' in slide && slide.media?.kind === 'video'
 }
 
-/** Vídeo vira frame estático quando o destino é PNG. */
-async function pngMediaOverride(slide: Slide): Promise<SlideMedia | null | undefined> {
-  const media = slideMedia(slide)
-  if (media && media.kind === 'video') {
-    const poster = await videoPosterFrame(media.src)
-    return { kind: 'image', src: poster, name: media.name }
+/** Vídeos viram frame estático quando o destino é PNG. */
+async function posterizeSlide(slide: Slide): Promise<Slide> {
+  const fix = async (m: SlideMedia | null): Promise<SlideMedia | null> =>
+    m && m.kind === 'video'
+      ? { kind: 'image', src: await videoPosterFrame(m.src), name: m.name }
+      : m
+  if (slide.type === 'split') {
+    return {
+      ...slide,
+      top: { ...slide.top, media: await fix(slide.top.media) },
+      bottom: { ...slide.bottom, media: await fix(slide.bottom.media) },
+    }
   }
-  return undefined
+  if ('media' in slide) {
+    return { ...slide, media: await fix(slide.media) }
+  }
+  return slide
 }
 
 const CAPTURE_OPTS = { width: SLIDE_W, height: SLIDE_H, scale: 1 }
 
 export async function exportSlidePng(slide: Slide, project: Project): Promise<Blob> {
-  const override = await pngMediaOverride(slide)
-  return withRenderedSlide(slide, project, 'full', override, (node) =>
+  const posterized = await posterizeSlide(slide)
+  return withRenderedSlide(posterized, project, 'full', (node) =>
     domToBlob(node, { ...CAPTURE_OPTS, type: 'image/png' }),
   )
 }
 
-/** PNG transparente só com a arte (sem a mídia), pra compor sobre vídeo. */
+/** PNG transparente só com a arte (sem as mídias), pra compor sobre vídeo. */
 export async function exportOverlayPng(slide: Slide, project: Project): Promise<Blob> {
-  return withRenderedSlide(slide, project, 'overlay', null, (node) =>
+  return withRenderedSlide(slide, project, 'overlay', (node) =>
     domToBlob(node, { ...CAPTURE_OPTS, type: 'image/png' }),
   )
 }
 
 async function overlayDataUrl(slide: Slide, project: Project): Promise<string> {
-  return withRenderedSlide(slide, project, 'overlay', null, (node) =>
+  return withRenderedSlide(slide, project, 'overlay', (node) =>
     domToDataUrl(node, { ...CAPTURE_OPTS, type: 'image/png' }),
   )
 }
@@ -68,81 +83,91 @@ export async function exportAllPngZip(
   return zip.generateAsync({ type: 'blob' })
 }
 
-/** Região que a mídia ocupa no slide, em px do slide (1080x1350). */
-function mediaRect(slide: Slide): { x: number; y: number; w: number; h: number } {
-  if (slide.type === 'final') {
-    const w = Math.round(SLIDE_W * FINAL_MEDIA_FRAC)
-    return { x: SLIDE_W - w, y: 0, w, h: SLIDE_H }
-  }
-  return { x: 0, y: 0, w: SLIDE_W, h: SLIDE_H }
+// ---------------------------------------------------------------------------
+// Exportação de vídeo
+// ---------------------------------------------------------------------------
+
+interface Rect {
+  x: number
+  y: number
+  w: number
+  h: number
 }
 
-function drawCover(
-  ctx: CanvasRenderingContext2D,
-  video: HTMLVideoElement,
-  rect: { x: number; y: number; w: number; h: number },
-): void {
-  const vw = video.videoWidth
-  const vh = video.videoHeight
-  if (!vw || !vh) return
-  const scale = Math.max(rect.w / vw, rect.h / vh)
-  const dw = vw * scale
-  const dh = vh * scale
-  const dx = rect.x + (rect.w - dw) / 2
-  const dy = rect.y + (rect.h - dh) / 2
+interface MediaLayer {
+  media: SlideMedia
+  rect: Rect
+}
+
+/** Onde cada mídia fica no slide, em px do slide (1080x1350). */
+function mediaLayers(slide: Slide): MediaLayer[] {
+  if (slide.type === 'split') {
+    const half = SLIDE_H / 2
+    const layers: MediaLayer[] = []
+    if (slide.top.media) {
+      layers.push({ media: slide.top.media, rect: { x: 0, y: 0, w: SLIDE_W, h: half } })
+    }
+    if (slide.bottom.media) {
+      layers.push({
+        media: slide.bottom.media,
+        rect: { x: 0, y: half, w: SLIDE_W, h: half },
+      })
+    }
+    return layers
+  }
+  if (slide.type === 'final') {
+    if (!slide.media) return []
+    const w = Math.round(SLIDE_W * FINAL_MEDIA_FRAC)
+    return [{ media: slide.media, rect: { x: SLIDE_W - w, y: 0, w, h: SLIDE_H } }]
+  }
+  if ('media' in slide && slide.media) {
+    return [{ media: slide.media, rect: { x: 0, y: 0, w: SLIDE_W, h: SLIDE_H } }]
+  }
+  return []
+}
+
+interface Drawable {
+  el: HTMLVideoElement | HTMLImageElement
+  rect: Rect
+}
+
+function drawCover(ctx: CanvasRenderingContext2D, d: Drawable): void {
+  const el = d.el
+  const sw = el instanceof HTMLVideoElement ? el.videoWidth : el.naturalWidth
+  const sh = el instanceof HTMLVideoElement ? el.videoHeight : el.naturalHeight
+  if (!sw || !sh) return
+  const scale = Math.max(d.rect.w / sw, d.rect.h / sh)
+  const dw = sw * scale
+  const dh = sh * scale
+  const dx = d.rect.x + (d.rect.w - dw) / 2
+  const dy = d.rect.y + (d.rect.h - dh) / 2
   ctx.save()
   ctx.beginPath()
-  ctx.rect(rect.x, rect.y, rect.w, rect.h)
+  ctx.rect(d.rect.x, d.rect.y, d.rect.w, d.rect.h)
   ctx.clip()
-  ctx.drawImage(video, dx, dy, dw, dh)
+  ctx.drawImage(el, dx, dy, dw, dh)
   ctx.restore()
 }
 
-function pickVideoMime(): string | null {
+function pickVideoMimes(): string[] {
+  if (typeof MediaRecorder === 'undefined') return []
   const candidates = [
     'video/mp4;codecs=avc1.42E01E',
     'video/mp4',
     'video/webm;codecs=vp9',
     'video/webm',
   ]
-  for (const c of candidates) {
-    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) {
-      return c
-    }
-  }
-  return null
+  const supported = candidates.filter((c) => MediaRecorder.isTypeSupported(c))
+  // No máximo um formato de cada família: o segundo da mesma família só
+  // repetiria o resultado do primeiro.
+  const mp4 = supported.find((c) => c.startsWith('video/mp4'))
+  const webm = supported.find((c) => c.startsWith('video/webm'))
+  return [mp4, webm].filter((c): c is string => Boolean(c))
 }
 
-export interface VideoExportResult {
-  blob: Blob
-  extension: 'mp4' | 'webm'
-}
-
-/**
- * Exporta o slide como vídeo: o vídeo de fundo é tocado em tempo real num
- * canvas 1080x1350 com a arte (textos, borda, granulado) composta por cima.
- */
-export async function exportSlideVideo(
-  slide: Slide,
-  project: Project,
-  onProgress: (fraction: number) => void,
-): Promise<VideoExportResult> {
-  const media = slideMedia(slide)
-  if (!media || media.kind !== 'video') {
-    throw new Error('Este slide não tem vídeo.')
-  }
-  const mime = pickVideoMime()
-  if (!mime) {
-    throw new Error('Este navegador não suporta gravação de vídeo. Use o Chrome.')
-  }
-
-  const overlayUrl = await overlayDataUrl(slide, project)
-  const overlay = new Image()
-  overlay.src = overlayUrl
-  await overlay.decode()
-
+async function loadVideoEl(src: string): Promise<HTMLVideoElement> {
   const video = document.createElement('video')
-  video.src = media.src
+  video.src = src
   video.muted = true
   video.playsInline = true
   await new Promise<void>((resolve, reject) => {
@@ -152,6 +177,62 @@ export async function exportSlideVideo(
     })
     video.load()
   })
+  return video
+}
+
+export interface VideoExportResult {
+  blob: Blob
+  extension: 'mp4' | 'webm'
+}
+
+/**
+ * Exporta o slide como vídeo: as mídias tocam em tempo real num canvas
+ * 1080x1350 com a arte (textos, molduras, granulado) composta por cima.
+ * Funciona também na tela partida com dois vídeos ao mesmo tempo.
+ */
+export async function exportSlideVideo(
+  slide: Slide,
+  project: Project,
+  onProgress: (fraction: number) => void,
+): Promise<VideoExportResult> {
+  const layers = mediaLayers(slide)
+  if (!layers.some((l) => l.media.kind === 'video')) {
+    throw new Error('Este slide não tem vídeo.')
+  }
+  const mimes = pickVideoMimes()
+  if (mimes.length === 0) {
+    throw new Error('Este navegador não suporta gravação de vídeo. Use o Chrome.')
+  }
+
+  const overlayUrl = await overlayDataUrl(slide, project)
+  const overlay = new Image()
+  overlay.src = overlayUrl
+  await overlay.decode()
+
+  const drawables: Drawable[] = []
+  const videos: HTMLVideoElement[] = []
+  for (const layer of layers) {
+    if (layer.media.kind === 'video') {
+      const el = await loadVideoEl(layer.media.src)
+      videos.push(el)
+      drawables.push({ el, rect: layer.rect })
+    } else {
+      const el = new Image()
+      el.src = layer.media.src
+      await el.decode()
+      drawables.push({ el, rect: layer.rect })
+    }
+  }
+
+  // O vídeo "principal" dita a duração; os outros ficam em loop.
+  const finite = videos.filter((v) => Number.isFinite(v.duration))
+  const main =
+    finite.length > 0
+      ? finite.reduce((a, b) => (b.duration > a.duration ? b : a))
+      : videos[0]
+  for (const v of videos) {
+    if (v !== main) v.loop = true
+  }
 
   const canvas = document.createElement('canvas')
   canvas.width = SLIDE_W
@@ -159,21 +240,94 @@ export async function exportSlideVideo(
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Canvas 2D indisponível')
 
-  const rect = mediaRect(slide)
   const drawFrame = () => {
     ctx.fillStyle = '#0b0b0b'
     ctx.fillRect(0, 0, SLIDE_W, SLIDE_H)
-    drawCover(ctx, video, rect)
+    for (const d of drawables) drawCover(ctx, d)
     ctx.drawImage(overlay, 0, 0, SLIDE_W, SLIDE_H)
+  }
+
+  // Alguns navegadores dizem suportar MP4 mas gravam um arquivo vazio ou de
+  // um frame só (sem encoder H.264 de verdade). Por isso: grava, valida a
+  // duração do resultado e cai pro próximo formato se sair quebrado.
+  try {
+    for (const mime of mimes) {
+      const blob = await recordPass(mime, videos, main, canvas, drawFrame, onProgress)
+      if (blob && blob.size > 0 && (await recordingLooksComplete(blob, main.duration))) {
+        return { blob, extension: mime.includes('mp4') ? 'mp4' : 'webm' }
+      }
+    }
+  } finally {
+    for (const v of videos) {
+      v.pause()
+      v.removeAttribute('src')
+      v.load()
+    }
+  }
+  throw new Error('Não foi possível gravar o vídeo neste navegador. Tente o Chrome.')
+}
+
+/** Confere se a gravação cobre o vídeo original (pega MP4 de 1 frame só). */
+async function recordingLooksComplete(
+  blob: Blob,
+  sourceDuration: number,
+): Promise<boolean> {
+  if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) return true
+  const url = URL.createObjectURL(blob)
+  try {
+    const probe = document.createElement('video')
+    probe.preload = 'metadata'
+    probe.src = url
+    const duration = await new Promise<number>((resolve) => {
+      probe.addEventListener('loadedmetadata', () => resolve(probe.duration), {
+        once: true,
+      })
+      probe.addEventListener('error', () => resolve(0), { once: true })
+      probe.load()
+    })
+    // WebM gravado em stream costuma reportar Infinity: isso é normal.
+    if (!Number.isFinite(duration)) return true
+    return duration >= sourceDuration * 0.7
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+/** Uma passada de gravação: toca os vídeos do início ao fim compondo no canvas. */
+async function recordPass(
+  mime: string,
+  videos: HTMLVideoElement[],
+  main: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  drawFrame: () => void,
+  onProgress: (fraction: number) => void,
+): Promise<Blob | null> {
+  // Volta todos pro início (importante quando o formato anterior falhou)
+  for (const v of videos) {
+    v.pause()
+    if (v.currentTime !== 0) {
+      await new Promise<void>((resolve) => {
+        v.addEventListener('seeked', () => resolve(), { once: true })
+        v.currentTime = 0
+      })
+    }
   }
   drawFrame()
 
   const stream = canvas.captureStream(30)
-  const recorder = new MediaRecorder(stream, {
-    mimeType: mime,
-    videoBitsPerSecond: 12_000_000,
-  })
+  let recorder: MediaRecorder
+  try {
+    recorder = new MediaRecorder(stream, {
+      mimeType: mime,
+      videoBitsPerSecond: 12_000_000,
+    })
+  } catch {
+    stream.getTracks().forEach((t) => t.stop())
+    return null
+  }
+
   const chunks: Blob[] = []
+  let failed = false
   recorder.ondataavailable = (e) => {
     if (e.data.size > 0) chunks.push(e.data)
   }
@@ -181,39 +335,47 @@ export async function exportSlideVideo(
     recorder.onstop = () => resolve()
   })
 
-  recorder.start(250)
-  await video.play()
-
-  await new Promise<void>((resolve) => {
+  const finished = new Promise<void>((resolve) => {
     let rafId = 0
+    const done = () => {
+      cancelAnimationFrame(rafId)
+      resolve()
+    }
+    recorder.onerror = () => {
+      failed = true
+      done()
+    }
     const tick = () => {
       drawFrame()
-      if (video.duration > 0) onProgress(Math.min(1, video.currentTime / video.duration))
-      if (video.ended) {
-        cancelAnimationFrame(rafId)
-        resolve()
+      if (Number.isFinite(main.duration) && main.duration > 0) {
+        onProgress(Math.min(1, main.currentTime / main.duration))
+      }
+      if (main.ended) {
+        done()
         return
       }
       rafId = requestAnimationFrame(tick)
     }
-    video.addEventListener(
-      'ended',
-      () => {
-        cancelAnimationFrame(rafId)
-        resolve()
-      },
-      { once: true },
-    )
+    main.addEventListener('ended', done, { once: true })
     rafId = requestAnimationFrame(tick)
   })
 
+  recorder.start(250)
+  try {
+    await Promise.all(videos.map((v) => v.play()))
+  } catch {
+    recorder.stop()
+    stream.getTracks().forEach((t) => t.stop())
+    return null
+  }
+  await finished
+
+  for (const v of videos) v.pause()
   drawFrame()
-  recorder.stop()
+  if (recorder.state !== 'inactive') recorder.stop()
   await stopped
   stream.getTracks().forEach((t) => t.stop())
 
-  return {
-    blob: new Blob(chunks, { type: mime }),
-    extension: mime.includes('mp4') ? 'mp4' : 'webm',
-  }
+  if (failed) return null
+  return new Blob(chunks, { type: mime })
 }

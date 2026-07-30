@@ -14,7 +14,38 @@ export async function fileToMedia(file: File): Promise<SlideMedia> {
   return { kind: 'image', src: dataUrl, name: file.name }
 }
 
-async function resizeImageToDataUrl(file: File): Promise<string> {
+/**
+ * Lê uma imagem copiada (ex.: "copiar imagem" no Google) direto da área de
+ * transferência, sem precisar baixar o arquivo.
+ */
+export async function clipboardToMedia(): Promise<SlideMedia> {
+  if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
+    throw new Error(
+      'Este navegador não deixa colar por botão. Toque no slide e use Ctrl+V, ou envie o arquivo.',
+    )
+  }
+  let items: ClipboardItems
+  try {
+    items = await navigator.clipboard.read()
+  } catch {
+    throw new Error(
+      'Não consegui acessar a área de transferência. Permita o acesso quando o navegador pedir, ou use Ctrl+V.',
+    )
+  }
+  for (const item of items) {
+    const type = item.types.find((t) => t.startsWith('image/'))
+    if (type) {
+      const blob = await item.getType(type)
+      const dataUrl = await resizeImageToDataUrl(blob)
+      return { kind: 'image', src: dataUrl, name: 'imagem-colada' }
+    }
+  }
+  throw new Error(
+    'Não achei nenhuma imagem copiada. Copie uma imagem primeiro (no celular: toque e segure a imagem → "Copiar imagem").',
+  )
+}
+
+async function resizeImageToDataUrl(file: Blob): Promise<string> {
   const url = URL.createObjectURL(file)
   try {
     const img = new Image()

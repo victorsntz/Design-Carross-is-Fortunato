@@ -6,13 +6,18 @@ Nada de arrastar elementos: a diagramação nunca quebra.
 
 ## O que dá pra fazer
 
-- **4 tipos de slide** com o design fixo do formato:
-  - **Comparação** — foto ou vídeo de fundo + frase curta (em cima ou embaixo)
+- **5 tipos de slide** com o design fixo do formato:
+  - **Tela partida** — duas fotos e dois textos no mesmo slide (o par de comparação),
+    cada metade com sua moldura tracejada
+  - **Foto de fundo** — foto ou vídeo inteiro + frase curta com sombra de contraste
   - **Desenvolvimento** — fundo preto + parágrafos + frase de fechamento em negrito
   - **Livro / Oferta** — imagem do produto centralizada + texto
   - **Final (CTA)** — texto "Me segue se…" à esquerda + foto à direita
 - **Tudo por botões**: trocar mídia, aumentar/diminuir texto (5 tamanhos), posição do texto,
   reordenar, duplicar e excluir slides.
+- **Colar imagem sem baixar**: copiou uma imagem (no Google, por exemplo)? O botão
+  **"Colar imagem"** joga a imagem direto no espaço certo do slide. Ctrl+V também funciona.
+  No celular: toque e segure a imagem → "Copiar imagem" → botão "Colar imagem".
 - **Vídeo direto no slide**: sobe o vídeo, ele vira o fundo do slide, e o app exporta o
   vídeo pronto com a arte (textos, borda, granulado) por cima — sem precisar de Figma + editor.
 - **Exportações**:

@@ -5,7 +5,10 @@ import type {
   FinalSlide,
   Project,
   Slide,
+  SlideMedia,
   SlideType,
+  SplitHalf,
+  SplitSlide,
 } from './types'
 import { DEFAULT_STEP } from './components/SlideRenderer'
 
@@ -21,6 +24,15 @@ export function newId(): string {
 export function makeSlide(type: SlideType): Slide {
   const base = { id: newId(), sizeStep: DEFAULT_STEP }
   switch (type) {
+    case 'split': {
+      const s: SplitSlide = {
+        ...base,
+        type,
+        top: { media: null, text: 'Lado A: o primeiro dado da comparação.' },
+        bottom: { media: null, text: 'Lado B: o contraste que muda a leitura.' },
+      }
+      return s
+    }
     case 'comparison': {
       const s: ComparisonSlide = {
         ...base,
@@ -64,32 +76,49 @@ export function makeSlide(type: SlideType): Slide {
 }
 
 export function defaultProject(): Project {
-  const c1 = makeSlide('comparison') as ComparisonSlide
-  c1.text = 'Lado A: comece com o dado mais forte da comparação.'
-  const c2 = makeSlide('comparison') as ComparisonSlide
-  c2.text = 'Lado B: mostre o contraste. É aqui que a percepção vira.'
-  const c3 = makeSlide('comparison') as ComparisonSlide
-  c3.text = 'Repita o movimento: mais um dado do Lado A.'
-  const c4 = makeSlide('comparison') as ComparisonSlide
-  c4.text = 'E o contraste de novo. *A repetição constrói o argumento.*'
+  const splits = [
+    ['Lado A: comece com o dado mais forte.', 'Lado B: o contraste vem logo abaixo.'],
+    ['Mais um dado do Lado A.', 'E o contraste de novo, sempre em par.'],
+    ['O padrão se repete no terceiro par.', '*A repetição constrói o argumento.*'],
+    ['Feche a sequência com o dado mais duro.', 'E o contraste que ninguém esquece.'],
+  ].map(([topText, bottomText]) => {
+    const s = makeSlide('split') as SplitSlide
+    s.top.text = topText
+    s.bottom.text = bottomText
+    return s
+  })
+
   const dev = makeSlide('development') as DevelopmentSlide
   dev.body =
     'Aqui entra o desenvolvimento: você conecta os dados que acabou de mostrar e explica o que eles significam.\n\nEscreva em parágrafos curtos. Linha em branco separa parágrafos. Use **negrito**, *itálico* e _sublinhado_ quando precisar.'
   dev.emphasis = 'A conclusão forte fecha em negrito, centralizada.'
+
+  const photo = makeSlide('comparison') as ComparisonSlide
+  photo.text = 'Depois do desenvolvimento, uma foto inteira com uma frase de impacto.'
+
   const fin = makeSlide('final') as FinalSlide
 
   return {
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
-    slides: [c1, c2, c3, c4, dev, fin],
+    slides: [...splits, dev, photo, fin],
   }
 }
 
 /** Remove mídias que não sobrevivem ao reload (vídeos usam objectURL). */
 function stripVolatileMedia(project: Project): Project {
+  const keep = (m: SlideMedia | null): SlideMedia | null =>
+    m && m.kind === 'video' ? null : m
   return {
     ...project,
     slides: project.slides.map((s) => {
+      if (s.type === 'split') {
+        return {
+          ...s,
+          top: { ...s.top, media: keep(s.top.media) },
+          bottom: { ...s.bottom, media: keep(s.bottom.media) },
+        }
+      }
       if ('media' in s && s.media && s.media.kind === 'video') {
         return { ...s, media: null }
       }
@@ -117,6 +146,29 @@ export function loadProjectFromStorage(): Project | null {
   }
 }
 
+function sanitizeMedia(m: unknown): SlideMedia | null {
+  if (typeof m !== 'object' || m === null) return null
+  const mm = m as SlideMedia
+  if (mm.kind !== 'image' && mm.kind !== 'video') return null
+  if (typeof mm.src !== 'string' || mm.src === '') return null
+  // objectURL de outra sessão não funciona mais
+  if (mm.src.startsWith('blob:')) return null
+  return {
+    kind: mm.kind,
+    src: mm.src,
+    name: typeof mm.name === 'string' ? mm.name : undefined,
+  }
+}
+
+function sanitizeHalf(h: unknown, fallback: SplitHalf): SplitHalf {
+  if (typeof h !== 'object' || h === null) return { ...fallback }
+  const hh = h as Partial<SplitHalf>
+  return {
+    media: sanitizeMedia(hh.media),
+    text: typeof hh.text === 'string' ? hh.text : fallback.text,
+  }
+}
+
 /** Valida/normaliza um projeto vindo de storage ou de arquivo .json. */
 export function normalizeProject(data: unknown): Project | null {
   if (typeof data !== 'object' || data === null) return null
@@ -126,21 +178,20 @@ export function normalizeProject(data: unknown): Project | null {
   for (const s of p.slides) {
     if (typeof s !== 'object' || s === null) continue
     const sl = s as Slide
-    if (!['comparison', 'development', 'book', 'final'].includes(sl.type)) continue
+    if (!['split', 'comparison', 'development', 'book', 'final'].includes(sl.type)) {
+      continue
+    }
     const fresh = makeSlide(sl.type)
     const merged = { ...fresh, ...sl, id: sl.id || newId() } as Slide
-    if ('media' in merged && merged.media) {
-      const m = merged.media
-      if (
-        typeof m.src !== 'string' ||
-        m.src === '' ||
-        (m.kind === 'video' && !m.src.startsWith('blob:') && !m.src.startsWith('data:'))
-      ) {
-        merged.media = null
-      } else if (m.kind === 'video' && m.src.startsWith('blob:')) {
-        // objectURL de outra sessão não funciona mais
-        merged.media = null
-      }
+    if (typeof merged.sizeStep !== 'number' || Number.isNaN(merged.sizeStep)) {
+      merged.sizeStep = DEFAULT_STEP
+    }
+    if (merged.type === 'split') {
+      const freshSplit = fresh as SplitSlide
+      merged.top = sanitizeHalf(merged.top, freshSplit.top)
+      merged.bottom = sanitizeHalf(merged.bottom, freshSplit.bottom)
+    } else if ('media' in merged) {
+      merged.media = sanitizeMedia(merged.media)
     }
     slides.push(merged)
   }

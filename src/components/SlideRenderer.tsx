@@ -7,6 +7,8 @@ import type {
   Project,
   Slide,
   SlideMedia,
+  SplitHalf,
+  SplitSlide,
 } from '../types'
 import { renderInline, renderParagraphs } from '../markdown'
 
@@ -20,6 +22,7 @@ export const SIZE_STEPS = 5
 export const DEFAULT_STEP = 2
 
 const FONT_SIZES: Record<Slide['type'], number[]> = {
+  split: [30, 34, 38, 43, 48],
   comparison: [38, 44, 50, 57, 64],
   development: [30, 34, 38, 43, 48],
   book: [28, 32, 36, 40, 45],
@@ -40,8 +43,6 @@ interface RendererProps {
   /** Largura de exibição em px; o slide é desenhado em 1080x1350 e escalado. */
   width: number
   mode?: RenderMode
-  /** Substitui a mídia do slide (ex.: frame de um vídeo virando imagem). */
-  mediaOverride?: SlideMedia | null
 }
 
 function MediaEl({ media, className }: { media: SlideMedia; className: string }) {
@@ -74,11 +75,20 @@ function Captions({ project }: { project: Project }) {
   )
 }
 
-function Chrome({ project, mode }: { project: Project; mode: RenderMode }) {
+function Chrome({
+  project,
+  mode,
+  frame = true,
+}: {
+  project: Project
+  mode: RenderMode
+  /** Tela partida desenha uma moldura por metade, então dispensa a geral. */
+  frame?: boolean
+}) {
   return (
     <>
       <div className={mode === 'overlay' ? 'sl-grain sl-grain--flat' : 'sl-grain'} />
-      <div className="sl-frame" />
+      {frame && <div className="sl-frame" />}
       <Captions project={project} />
     </>
   )
@@ -89,6 +99,53 @@ function Placeholder({ label }: { label: string }) {
     <div className="sl-placeholder">
       <span>{label}</span>
     </div>
+  )
+}
+
+function SplitHalfLayers({
+  half,
+  region,
+  fontSize,
+  mode,
+}: {
+  half: SplitHalf
+  region: 'top' | 'bottom'
+  fontSize: number
+  mode: RenderMode
+}) {
+  return (
+    <div className={`sl-split-half sl-split-half--${region}`}>
+      {half.media && mode !== 'overlay' && (
+        <MediaEl media={half.media} className="sl-media-abs" />
+      )}
+      {!half.media && mode === 'full' && (
+        <div className="sl-split-placeholder">
+          <span>
+            {region === 'top' ? 'Foto da metade de cima' : 'Foto da metade de baixo'}
+          </span>
+        </div>
+      )}
+      <div className="sl-split-grad" />
+      <div className="sl-split-text" style={{ fontSize }}>
+        {renderInline(half.text)}
+      </div>
+      <div className={`sl-split-frame sl-split-frame--${region}`} />
+    </div>
+  )
+}
+
+function SplitLayers({ slide, mode }: { slide: SplitSlide; mode: RenderMode }) {
+  const fontSize = fontSizeFor(slide)
+  return (
+    <>
+      <SplitHalfLayers half={slide.top} region="top" fontSize={fontSize} mode={mode} />
+      <SplitHalfLayers
+        half={slide.bottom}
+        region="bottom"
+        fontSize={fontSize}
+        mode={mode}
+      />
+    </>
   )
 }
 
@@ -189,27 +246,19 @@ function FinalLayers({
   )
 }
 
-export function SlideRenderer({
-  slide,
-  project,
-  width,
-  mode = 'full',
-  mediaOverride,
-}: RendererProps) {
+export function SlideRenderer({ slide, project, width, mode = 'full' }: RendererProps) {
   const scale = width / SLIDE_W
   const outerStyle: CSSProperties = {
     width,
     height: Math.round(width * (SLIDE_H / SLIDE_W)),
   }
-  const media =
-    mediaOverride !== undefined
-      ? mediaOverride
-      : 'media' in slide
-        ? slide.media
-        : null
+  const media = 'media' in slide ? slide.media : null
 
   let layers: JSX.Element
   switch (slide.type) {
+    case 'split':
+      layers = <SplitLayers slide={slide} mode={mode} />
+      break
     case 'comparison':
       layers = <ComparisonLayers slide={slide} media={media} mode={mode} />
       break
@@ -231,7 +280,7 @@ export function SlideRenderer({
         style={{ transform: `scale(${scale})` }}
       >
         {layers}
-        <Chrome project={project} mode={mode} />
+        <Chrome project={project} mode={mode} frame={slide.type !== 'split'} />
       </div>
     </div>
   )

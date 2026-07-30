@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
-import type { Project, Slide, SlideMedia } from './types'
+import type { Project, Slide } from './types'
 import { SlideRenderer, SLIDE_W, type RenderMode } from './components/SlideRenderer'
 
 async function waitForAssets(host: HTMLElement): Promise<void> {
@@ -23,7 +23,6 @@ export async function withRenderedSlide<T>(
   slide: Slide,
   project: Project,
   mode: RenderMode,
-  mediaOverride: SlideMedia | null | undefined,
   fn: (node: HTMLElement) => Promise<T>,
 ): Promise<T> {
   const host = document.createElement('div')
@@ -34,13 +33,7 @@ export async function withRenderedSlide<T>(
   try {
     flushSync(() => {
       root.render(
-        <SlideRenderer
-          slide={slide}
-          project={project}
-          width={SLIDE_W}
-          mode={mode}
-          mediaOverride={mediaOverride}
-        />,
+        <SlideRenderer slide={slide} project={project} width={SLIDE_W} mode={mode} />,
       )
     })
     await waitForAssets(host)

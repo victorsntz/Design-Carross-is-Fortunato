@@ -7,7 +7,7 @@ export interface SlideMedia {
   name?: string
 }
 
-export type SlideType = 'comparison' | 'development' | 'book' | 'final'
+export type SlideType = 'split' | 'comparison' | 'development' | 'book' | 'final'
 
 interface BaseSlide {
   id: string
@@ -16,7 +16,20 @@ interface BaseSlide {
   sizeStep: number
 }
 
-/** Slide de comparação: foto/vídeo de fundo + frase curta. */
+/** Metade de uma tela partida: foto/vídeo + frase curta. */
+export interface SplitHalf {
+  media: SlideMedia | null
+  text: string
+}
+
+/** Tela partida: duas fotos e dois textos no mesmo slide (cima/baixo). */
+export interface SplitSlide extends BaseSlide {
+  type: 'split'
+  top: SplitHalf
+  bottom: SplitHalf
+}
+
+/** Foto de fundo inteira + frase curta com sombra de contraste. */
 export interface ComparisonSlide extends BaseSlide {
   type: 'comparison'
   media: SlideMedia | null
@@ -46,7 +59,12 @@ export interface FinalSlide extends BaseSlide {
   text: string
 }
 
-export type Slide = ComparisonSlide | DevelopmentSlide | BookSlide | FinalSlide
+export type Slide =
+  | SplitSlide
+  | ComparisonSlide
+  | DevelopmentSlide
+  | BookSlide
+  | FinalSlide
 
 export interface Project {
   /** Assinatura pequena no topo esquerdo de todos os slides. */
