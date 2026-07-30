@@ -21,12 +21,14 @@ export const FINAL_MEDIA_FRAC = 0.44
 export const SIZE_STEPS = 5
 export const DEFAULT_STEP = 2
 
+// Calibrado pra densidade real do formato: os slides carregam bastante
+// texto, então os padrões (índice 2) assumem parágrafos cheios.
 const FONT_SIZES: Record<Slide['type'], number[]> = {
-  split: [30, 34, 38, 43, 48],
-  comparison: [38, 44, 50, 57, 64],
-  development: [30, 34, 38, 43, 48],
-  book: [28, 32, 36, 40, 45],
-  final: [44, 50, 56, 63, 70],
+  split: [28, 32, 36, 40, 45],
+  comparison: [32, 36, 40, 45, 50],
+  development: [26, 30, 34, 38, 43],
+  book: [26, 30, 34, 38, 42],
+  final: [38, 43, 48, 54, 60],
 }
 
 export function fontSizeFor(slide: Slide): number {

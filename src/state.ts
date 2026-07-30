@@ -64,7 +64,7 @@ export function makeSlide(type: SlideType): Slide {
         ...base,
         type,
         body:
-          'Escreva aqui o desenvolvimento do argumento. Linha em branco separa parágrafos.\n\nUse **negrito** para dar peso, *itálico* para citações e _sublinhado_ para destacar.',
+          'Escreva aqui o desenvolvimento do argumento, em parágrafos curtos de duas ou três linhas. Linha em branco separa parágrafos.\n\nO formato pede texto de verdade: traga o contexto que as fotos não contam — de onde saíram os números, o que aconteceu antes, quem decidiu o quê.\n\nUse **negrito** para dar peso, *itálico* para citações e _sublinhado_ para destacar.',
         emphasis: '',
       }
       return s
@@ -75,7 +75,7 @@ export function makeSlide(type: SlideType): Slide {
         type,
         media: null,
         body:
-          'Apresente aqui o seu produto ou livro, conectando com o tema do carrossel.\n\nSe você já quer o convite, comenta **EU QUERO** aqui embaixo que eu te mando no direct.',
+          'Apresente aqui o seu livro ou produto, sempre puxando pelo argumento que você acabou de construir nos slides anteriores — sem quebrar o tom da conversa.\n\nSe você já quer o convite, comenta **EU QUERO** aqui embaixo que eu te mando no direct.',
       }
       return s
     }
@@ -84,7 +84,7 @@ export function makeSlide(type: SlideType): Slide {
         ...base,
         type,
         media: null,
-        text: 'Me segue se você acha que *este assunto* merece mais atenção.',
+        text: 'Me segue se você acha que *este assunto* merece mais atenção do que vem recebendo. Toda semana tem uma conversa dessas aberta aqui.',
       }
       return s
     }
@@ -100,29 +100,43 @@ export function defaultProject(): Project {
   }
 
   const splits = [
-    split('Lado A: comece com o dado mais forte.', 'Lado B: o contraste vem logo abaixo.'),
-    split('Mais um dado do Lado A.', 'E o contraste de novo, sempre em par.'),
-    split('O padrão se repete no terceiro par.', '*A repetição constrói o argumento.*'),
-    split('Feche a sequência com o dado mais duro.', 'E o contraste que ninguém esquece.'),
+    split(
+      'Lado A: comece com o dado mais forte que você tem. Público, verificável e impossível de ignorar.',
+      'Lado B: o contraste vem logo abaixo, na mesma tela. É o par que faz a percepção virar.',
+    ),
+    split(
+      'Mais um dado do Lado A, no mesmo padrão do primeiro. A estrutura se repete de propósito.',
+      'E o contraste de novo. Quem desliza sente o acúmulo, par depois de par.',
+    ),
+    split(
+      'No terceiro par o leitor já sabe a regra do jogo e começa a completar sozinho.',
+      '*Citação ou ironia em itálico também funciona bem neste espaço.*',
+    ),
+    split(
+      'Feche a sequência com o dado mais duro que você guardou até agora.',
+      'E o contraste que ninguém esquece. É ele que vai pros comentários.',
+    ),
   ]
 
   const dev = makeSlide('development') as DevelopmentSlide
   dev.body =
-    'Aqui entra o desenvolvimento: você conecta os dados que acabou de mostrar e explica o que eles significam.\n\nEscreva em parágrafos curtos. Linha em branco separa parágrafos. Use **negrito**, *itálico* e _sublinhado_ quando precisar.'
+    'Aqui entra o desenvolvimento: você conecta os dados que acabou de mostrar e explica o que eles significam juntos. É a parte mais densa do carrossel — e é por isso que ela funciona.\n\nEscreva em parágrafos curtos, de duas ou três linhas. A pessoa está lendo no celular, com o dedo pronto pra deslizar: cada parágrafo precisa pagar a atenção que pede.\n\nTraga o contexto que as fotos não contam: de onde saíram os números, o que aconteceu antes, quem decidiu o quê. Use **negrito** pra dar peso, *itálico* pra citações e _sublinhado_ pra destacar.'
   dev.emphasis = 'A conclusão forte fecha em negrito.'
 
   const book = makeSlide('book') as BookSlide
 
   const photo1 = makeSlide('comparison') as ComparisonSlide
-  photo1.text = 'Depois do desenvolvimento, uma foto inteira com uma frase de impacto.'
+  photo1.text =
+    'Depois do desenvolvimento, respiro: uma foto inteira e uma frase de impacto. Duas ou três linhas seguram bem.'
 
   const split5 = split(
-    'Dá pra voltar pra comparação no meio do carrossel.',
-    'Alternando com as fotos inteiras, como no formato.',
+    'No meio do carrossel dá pra voltar pra comparação, no mesmo padrão dos primeiros pares.',
+    'Alternando com as fotos inteiras, o ritmo da leitura não cansa.',
   )
 
   const photo2 = makeSlide('comparison') as ComparisonSlide
-  photo2.text = 'Mais uma foto de fundo antes do convite final.'
+  photo2.text =
+    'Mais uma foto de fundo segurando uma frase forte antes do convite final.'
 
   const fin = makeSlide('final') as FinalSlide
 
