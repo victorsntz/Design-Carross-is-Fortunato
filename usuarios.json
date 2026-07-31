@@ -1,3 +1,26 @@
 [
-  { "usuario": "fortunato", "hash": "e1bcfb731406aaac4d52ceb603a0a8c377bbfc2273191f0d74fc4196fe81cffa" }
+  {
+    "usuario": "fortunato",
+    "hash": "e1bcfb731406aaac4d52ceb603a0a8c377bbfc2273191f0d74fc4196fe81cffa"
+  },
+  {
+    "usuario": "guilhermemarques",
+    "hash": "8f59210f1c98ee5bc1e64582002761384597005b3eb574a6001624987f101ef7"
+  },
+  {
+    "usuario": "engajatech",
+    "hash": "5a041739810560c10ae0174eebafdf98c5e99baa098fe2dd073ae54f92c81a5e"
+  },
+  {
+    "usuario": "victorfortunato",
+    "hash": "2629d8246f121eeb1d8608697477feff442365e93afb0f8adb8054b08193c3bf"
+  },
+  {
+    "usuario": "rebecafortunato",
+    "hash": "6877baa0509826a63d65eabd664ec1cd4548ef508aabc8c35c56c2143f1d0ffe"
+  },
+  {
+    "usuario": "kauadias",
+    "hash": "f3b3fb05476f061d4dcac537136303aa0ca654a961e90ea9820e5540d01033d9"
+  }
 ]
