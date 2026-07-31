@@ -235,6 +235,99 @@ function FileButton({
  * Ref de callback: re-observa sempre que o contêiner do slide monta/desmonta
  * (ele some atrás da tela de carregamento e quando não há slide).
  */
+/**
+ * Enquadramento da foto: setas movem o recorte, +/− dá zoom. Os limites
+ * garantem que a foto nunca descola das margens do espaço dela.
+ */
+function MediaAdjust({
+  media,
+  onChange,
+}: {
+  media: SlideMedia
+  onChange: (patch: Partial<SlideMedia>) => void
+}) {
+  const px = media.posX ?? 50
+  const py = media.posY ?? 50
+  const z = media.zoom ?? 1
+  const STEP = 10
+  const ZSTEP = 0.25
+  const ZMAX = 2.5
+  return (
+    <div className="control-row control-row--wrap">
+      <span className="control-label">Enquadrar</span>
+      <span className="adjust-group">
+        <button
+          type="button"
+          className="btn-icon"
+          title="Mostrar mais a esquerda da foto"
+          disabled={px <= 0}
+          onClick={() => onChange({ posX: Math.max(0, px - STEP) })}
+        >
+          ←
+        </button>
+        <button
+          type="button"
+          className="btn-icon"
+          title="Mostrar mais a direita da foto"
+          disabled={px >= 100}
+          onClick={() => onChange({ posX: Math.min(100, px + STEP) })}
+        >
+          →
+        </button>
+        <button
+          type="button"
+          className="btn-icon"
+          title="Mostrar mais o topo da foto"
+          disabled={py <= 0}
+          onClick={() => onChange({ posY: Math.max(0, py - STEP) })}
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          className="btn-icon"
+          title="Mostrar mais a base da foto"
+          disabled={py >= 100}
+          onClick={() => onChange({ posY: Math.min(100, py + STEP) })}
+        >
+          ↓
+        </button>
+      </span>
+      <span className="adjust-group">
+        <button
+          type="button"
+          className="btn-icon"
+          title="Menos zoom"
+          disabled={z <= 1}
+          onClick={() => onChange({ zoom: Math.max(1, Math.round((z - ZSTEP) * 100) / 100) })}
+        >
+          −
+        </button>
+        <button
+          type="button"
+          className="btn-icon"
+          title="Mais zoom"
+          disabled={z >= ZMAX}
+          onClick={() =>
+            onChange({ zoom: Math.min(ZMAX, Math.round((z + ZSTEP) * 100) / 100) })
+          }
+        >
+          +
+        </button>
+        <button
+          type="button"
+          className="btn-icon"
+          title="Voltar ao enquadramento original"
+          disabled={px === 50 && py === 50 && z === 1}
+          onClick={() => onChange({ posX: 50, posY: 50, zoom: 1 })}
+        >
+          ⟲
+        </button>
+      </span>
+    </div>
+  )
+}
+
 function usePreviewWidth(): [number, (el: HTMLDivElement | null) => void] {
   const [w, setW] = useState(320)
   const roRef = useRef<ResizeObserver | null>(null)
@@ -258,7 +351,7 @@ function usePreviewWidth(): [number, (el: HTMLDivElement | null) => void] {
 }
 
 export default function App() {
-  const [project, setProject] = useState<Project>(defaultProject)
+  const [project, setProjectRaw] = useState<Project>(defaultProject)
   const [projectId, setProjectId] = useState<string>(() => newId())
   const [saved, setSaved] = useState<ProjectSummary[]>([])
   const [selectedId, setSelectedId] = useState<string>(() => project.slides[0]?.id ?? '')
@@ -284,6 +377,55 @@ export default function App() {
   projectRef.current = project
   const projectIdRef = useRef(projectId)
   projectIdRef.current = projectId
+
+  // ------- desfazer: histórico dos últimos estados DESTE carrossel -------
+  const undoStack = useRef<Project[]>([])
+  const lastEditRef = useRef(0)
+  const [undoCount, setUndoCount] = useState(0)
+
+  /** Toda edição normal passa por aqui e vira um passo de "Desfazer". */
+  const setProject: typeof setProjectRaw = (action) => {
+    const now = Date.now()
+    // edições em sequência rápida (digitação) viram um passo só
+    if (now - lastEditRef.current > 800) {
+      undoStack.current.push(projectRef.current)
+      if (undoStack.current.length > 50) undoStack.current.shift()
+      setUndoCount(undoStack.current.length)
+    }
+    lastEditRef.current = now
+    setProjectRaw(action)
+  }
+
+  /** Troca de carrossel: substitui o estado SEM entrar no histórico. */
+  function replaceProject(p: Project) {
+    undoStack.current = []
+    setUndoCount(0)
+    lastEditRef.current = 0
+    setProjectRaw(p)
+  }
+
+  function undo() {
+    const prev = undoStack.current.pop()
+    setUndoCount(undoStack.current.length)
+    if (!prev) return
+    lastEditRef.current = Date.now()
+    setProjectRaw(prev)
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
+        return // dentro dos campos vale o desfazer nativo do navegador
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        undo()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
   // Ids excluídos nunca mais podem ser salvos: um rascunho pendente que
   // disparasse depois do "Excluir" ressuscitaria o carrossel apagado.
   const deletedIdsRef = useRef<Set<string>>(new Set())
@@ -300,13 +442,52 @@ export default function App() {
     void navigator.storage?.persist?.().catch(() => {})
   }, [])
 
+  // Registra a fonte da pessoa num <style> com @font-face: assim ela vale no
+  // editor E é embarcada na exportação dos PNGs.
+  useEffect(() => {
+    const id = 'fonte-personalizada'
+    const existing = document.getElementById(id)
+    if (!project.customFont) {
+      existing?.remove()
+      return
+    }
+    const el = existing ?? document.createElement('style')
+    el.id = id
+    el.textContent = `@font-face { font-family: 'FontePersonalizada'; src: url(${project.customFont.dataUrl}); font-display: swap; }`
+    if (!existing) document.head.appendChild(el)
+  }, [project.customFont])
+
+  const fontFileRef = useRef<HTMLInputElement>(null)
+
+  async function setCustomFontFile(file: File) {
+    if (file.size > 5_000_000) {
+      window.alert('Arquivo de fonte grande demais (máximo ~5MB).')
+      return
+    }
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(r.result as string)
+        r.onerror = () => reject(new Error('Falha ao ler o arquivo da fonte.'))
+        r.readAsDataURL(file)
+      })
+      setProject((p) => ({
+        ...p,
+        font: 'custom',
+        customFont: { name: file.name.replace(/\.[^.]+$/, ''), dataUrl },
+      }))
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Falha ao carregar a fonte.')
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
     void loadCurrentProject().then((current) => {
       if (cancelled) return
       if (current) {
         setProjectId(current.id)
-        setProject(current.project)
+        replaceProject(current.project)
         setSelectedId(current.project.slides[0]?.id ?? '')
         lastSavedRef.current = current.project
       }
@@ -480,6 +661,21 @@ export default function App() {
     } catch (err) {
       window.alert(err instanceof Error ? err.message : 'Falha ao colar a imagem.')
     }
+  }
+
+  /** Ajusta o enquadramento (posição/zoom) da mídia de um espaço. */
+  function adjustMedia(id: string, slot: MediaSlot, patch: Partial<SlideMedia>) {
+    updateSlide(id, (s) => {
+      if (s.type === 'split' && (slot === 'top' || slot === 'bottom')) {
+        const m = s[slot].media
+        if (!m) return s
+        return { ...s, [slot]: { ...s[slot], media: { ...m, ...patch } } } as Slide
+      }
+      if (slot === 'media' && 'media' in s && s.media) {
+        return { ...s, media: { ...s.media, ...patch } } as Slide
+      }
+      return s
+    })
   }
 
   // Ctrl+V / Cmd+V em qualquer lugar (fora dos campos de texto) cola a
@@ -764,7 +960,7 @@ export default function App() {
       // Entra como um carrossel novo na lista, sem sobrescrever o atual
       if (!(await saveBeforeLeaving())) return
       setProjectId(newId())
-      setProject(parsed)
+      replaceProject(parsed)
       setSelectedId(parsed.slides[0]?.id ?? '')
       refreshList()
     } catch (err) {
@@ -780,9 +976,10 @@ export default function App() {
       captionLeft: projectRef.current.captionLeft,
       captionRight: projectRef.current.captionRight,
       font: projectRef.current.font,
+      customFont: projectRef.current.customFont,
     })
     setProjectId(newId())
-    setProject(fresh)
+    replaceProject(fresh)
     setSelectedId(fresh.slides[0].id)
     refreshList()
   }
@@ -796,7 +993,7 @@ export default function App() {
       return
     }
     setProjectId(id)
-    setProject(loaded)
+    replaceProject(loaded)
     setSelectedId(loaded.slides[0]?.id ?? '')
     refreshList()
   }
@@ -815,9 +1012,10 @@ export default function App() {
         captionLeft: projectRef.current.captionLeft,
         captionRight: projectRef.current.captionRight,
         font: projectRef.current.font,
+        customFont: projectRef.current.customFont,
       })
       setProjectId(newId())
-      setProject(fresh)
+      replaceProject(fresh)
       setSelectedId(fresh.slides[0].id)
     }
     refreshList()
@@ -837,9 +1035,17 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="topbar-title">
-          <h1>Criador de Carrosséis</h1>
-          <span className="topbar-sub">comparação → desenvolvimento → final</span>
+          <h1>Criador Fortunato</h1>
         </div>
+        <button
+          type="button"
+          className="btn btn--small"
+          disabled={undoCount === 0}
+          title="Desfazer a última alteração (Ctrl+Z)"
+          onClick={undo}
+        >
+          ↩ Desfazer
+        </button>
         {draftFailed ? (
           <span className="save-status save-status--error">
             Não consegui salvar neste navegador — use “Baixar backup” pra não perder
@@ -886,7 +1092,50 @@ export default function App() {
               >
                 Sem serifa
               </button>
+              <button
+                type="button"
+                className={project.font === 'custom' ? 'seg seg--active' : 'seg'}
+                onClick={() => {
+                  if (project.customFont) {
+                    setProject((p) => ({ ...p, font: 'custom' }))
+                  } else {
+                    fontFileRef.current?.click()
+                  }
+                }}
+              >
+                Sua fonte
+              </button>
             </div>
+            {project.customFont && (
+              <div className="control-row">
+                <span className="control-label" title={project.customFont.name}>
+                  {project.customFont.name}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn--small"
+                  onClick={() => fontFileRef.current?.click()}
+                >
+                  Trocar arquivo
+                </button>
+              </div>
+            )}
+            {!project.customFont && (
+              <p className="hint">
+                “Sua fonte” aceita um arquivo TTF, OTF ou WOFF do seu computador.
+              </p>
+            )}
+            <input
+              ref={fontFileRef}
+              type="file"
+              accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) void setCustomFontFile(f)
+                e.target.value = ''
+              }}
+            />
           </section>
 
           <section className="card">
@@ -927,7 +1176,7 @@ export default function App() {
             </label>
           </section>
 
-          <section className="card">
+          <section className="card card--library">
             <h2 className="card-title">Meus carrosséis</h2>
             <button type="button" className="btn btn--full" onClick={() => void newCarousel()}>
               + Novo carrossel
@@ -1059,57 +1308,80 @@ export default function App() {
                       </button>
                     )}
                   </div>
+                  {selected.media && selected.type !== 'book' && (
+                    <MediaAdjust
+                      media={selected.media}
+                      onChange={(patch) => adjustMedia(selected.id, 'media', patch)}
+                    />
+                  )}
                   {selectedHasVideo && (
                     <p className="hint">
                       Vídeos valem só nesta sessão (não ficam no projeto salvo).
-                      Exporte o vídeo pronto no botão abaixo do slide — sai com o
+                      Exporte o vídeo pronto no botão "Exportar vídeo" — sai com o
                       áudio original.
                     </p>
                   )}
                 </section>
               )}
 
-              {selected.type === 'split' &&
-                (['top', 'bottom'] as const).map((slot) => {
-                  const half = (selected as SplitSlide)[slot]
-                  return (
-                    <section
-                      key={slot}
-                      className="card"
-                      style={{ borderLeft: `3px solid ${HALF_COLOR[slot]}` }}
-                    >
-                      <h2 className="card-title" style={{ color: HALF_COLOR[slot] }}>
-                        {slot === 'top' ? 'Metade de cima' : 'Metade de baixo'}
-                      </h2>
-                      <div className="control-row control-row--wrap">
-                        <FileButton
-                          label={half.media ? 'Trocar' : 'Foto ou vídeo'}
-                          accept="image/*,video/*"
-                          onFile={(f) => void setSlideMediaFromFile(selected.id, slot, f)}
-                          className="btn btn--small"
-                        />
-                        <button
-                          type="button"
-                          className="btn btn--small"
-                          title="Copiou uma imagem no Google? Cola direto aqui, sem baixar."
-                          onClick={() => void pasteFromClipboard(selected.id, slot)}
-                        >
-                          Colar imagem
-                        </button>
-                        {half.media && (
+              {selected.type === 'split' && (
+                <>
+                  {(['top', 'bottom'] as const).map((slot) => {
+                    const half = (selected as SplitSlide)[slot]
+                    return (
+                      <section
+                        key={slot}
+                        className="card"
+                        style={{ borderLeft: `3px solid ${HALF_COLOR[slot]}` }}
+                      >
+                        <h2 className="card-title" style={{ color: HALF_COLOR[slot] }}>
+                          {slot === 'top' ? 'Foto de cima' : 'Foto de baixo'}
+                        </h2>
+                        <div className="control-row control-row--wrap">
+                          <FileButton
+                            label={half.media ? 'Trocar' : 'Foto ou vídeo'}
+                            accept="image/*,video/*"
+                            onFile={(f) =>
+                              void setSlideMediaFromFile(selected.id, slot, f)
+                            }
+                            className="btn btn--small"
+                          />
                           <button
                             type="button"
-                            className="btn btn--small btn--danger"
-                            onClick={() => applyMedia(selected.id, slot, null)}
+                            className="btn btn--small"
+                            title="Copiou uma imagem no Google? Cola direto aqui, sem baixar."
+                            onClick={() => void pasteFromClipboard(selected.id, slot)}
                           >
-                            Remover
+                            Colar imagem
                           </button>
+                          {half.media && (
+                            <button
+                              type="button"
+                              className="btn btn--small btn--danger"
+                              onClick={() => applyMedia(selected.id, slot, null)}
+                            >
+                              Remover
+                            </button>
+                          )}
+                        </div>
+                        {half.media && (
+                          <MediaAdjust
+                            media={half.media}
+                            onChange={(patch) => adjustMedia(selected.id, slot, patch)}
+                          />
                         )}
-                      </div>
-                      <label className="field">
-                        <span>Texto</span>
+                      </section>
+                    )
+                  })}
+                  <section className="card">
+                    <h2 className="card-title">Textos</h2>
+                    {(['top', 'bottom'] as const).map((slot) => (
+                      <label key={slot} className="field">
+                        <span style={{ color: HALF_COLOR[slot] }}>
+                          {slot === 'top' ? 'Texto de cima' : 'Texto de baixo'}
+                        </span>
                         <AutoTextarea
-                          value={half.text}
+                          value={(selected as SplitSlide)[slot].text}
                           onValueChange={(v) =>
                             updateSlide(selected.id, (s) =>
                               s.type === 'split'
@@ -1119,9 +1391,43 @@ export default function App() {
                           }
                         />
                       </label>
-                    </section>
-                  )
-                })}
+                    ))}
+                    <div className="control-row">
+                      <span className="control-label">Tamanho do texto</span>
+                      <div className="stepper">
+                        <button
+                          type="button"
+                          className="btn btn--small"
+                          disabled={selected.sizeStep <= 0}
+                          onClick={() => stepSize(selected.id, -1)}
+                        >
+                          A−
+                        </button>
+                        <span className="stepper-dots">
+                          {Array.from({ length: SIZE_STEPS }, (_, i) => (
+                            <span
+                              key={i}
+                              className={i <= selected.sizeStep ? 'dot dot--on' : 'dot'}
+                            />
+                          ))}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn--small"
+                          disabled={selected.sizeStep >= SIZE_STEPS - 1}
+                          onClick={() => stepSize(selected.id, 1)}
+                        >
+                          A+
+                        </button>
+                      </div>
+                    </div>
+                    <p className="hint">
+                      Selecione uma palavra e use Ctrl+B (negrito), Ctrl+I (itálico)
+                      ou Ctrl+U (sublinhado).
+                    </p>
+                  </section>
+                </>
+              )}
 
               {(selected.type === 'comparison' ||
                 selected.type === 'development' ||
@@ -1176,6 +1482,35 @@ export default function App() {
                       />
                     </label>
                   )}
+                  <div className="control-row">
+                    <span className="control-label">Tamanho do texto</span>
+                    <div className="stepper">
+                      <button
+                        type="button"
+                        className="btn btn--small"
+                        disabled={selected.sizeStep <= 0}
+                        onClick={() => stepSize(selected.id, -1)}
+                      >
+                        A−
+                      </button>
+                      <span className="stepper-dots">
+                        {Array.from({ length: SIZE_STEPS }, (_, i) => (
+                          <span
+                            key={i}
+                            className={i <= selected.sizeStep ? 'dot dot--on' : 'dot'}
+                          />
+                        ))}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn--small"
+                        disabled={selected.sizeStep >= SIZE_STEPS - 1}
+                        onClick={() => stepSize(selected.id, 1)}
+                      >
+                        A+
+                      </button>
+                    </div>
+                  </div>
                   <p className="hint">
                     Selecione uma palavra e use Ctrl+B (negrito), Ctrl+I (itálico) ou
                     Ctrl+U (sublinhado) — ou escreva **negrito**, *itálico*,
@@ -1185,36 +1520,7 @@ export default function App() {
               )}
 
               <section className="card">
-                <h2 className="card-title">Ajustes</h2>
-                <div className="control-row">
-                  <span className="control-label">Tamanho do texto</span>
-                  <div className="stepper">
-                    <button
-                      type="button"
-                      className="btn btn--small"
-                      disabled={selected.sizeStep <= 0}
-                      onClick={() => stepSize(selected.id, -1)}
-                    >
-                      A−
-                    </button>
-                    <span className="stepper-dots">
-                      {Array.from({ length: SIZE_STEPS }, (_, i) => (
-                        <span
-                          key={i}
-                          className={i <= selected.sizeStep ? 'dot dot--on' : 'dot'}
-                        />
-                      ))}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn--small"
-                      disabled={selected.sizeStep >= SIZE_STEPS - 1}
-                      onClick={() => stepSize(selected.id, 1)}
-                    >
-                      A+
-                    </button>
-                  </div>
-                </div>
+                <h2 className="card-title">Slide</h2>
                 {selected.type === 'comparison' && (
                   <div className="control-row">
                     <span className="control-label">Posição da frase</span>

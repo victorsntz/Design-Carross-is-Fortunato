@@ -1,6 +1,7 @@
 import type {
   BookSlide,
   ComparisonSlide,
+  CustomFont,
   DevelopmentSlide,
   FinalSlide,
   FontStyle,
@@ -152,6 +153,7 @@ export function defaultProject(): Project {
   return {
     title: 'Meu primeiro carrossel',
     font: 'serif',
+    customFont: null,
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
     slides: [...splits, dev1, split5, dev2, split6, dev3, fin],
@@ -166,6 +168,7 @@ export function blankProject(base?: {
   captionLeft: string
   captionRight: string
   font: FontStyle
+  customFont: CustomFont | null
 }): Project {
   const structure: SlideType[] = [
     'split',
@@ -205,6 +208,7 @@ export function blankProject(base?: {
   return {
     title: 'Novo carrossel',
     font: base?.font ?? 'serif',
+    customFont: base?.customFont ?? null,
     captionLeft: base?.captionLeft ?? '',
     captionRight: base?.captionRight ?? '',
     slides,
@@ -458,6 +462,12 @@ export async function loadCurrentProject(): Promise<{
   }
 }
 
+function clampNum(v: unknown, min: number, max: number, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v)
+    ? Math.min(max, Math.max(min, v))
+    : fallback
+}
+
 function sanitizeMedia(m: unknown): SlideMedia | null {
   if (typeof m !== 'object' || m === null) return null
   const mm = m as SlideMedia
@@ -469,6 +479,9 @@ function sanitizeMedia(m: unknown): SlideMedia | null {
     kind: mm.kind,
     src: mm.src,
     name: typeof mm.name === 'string' ? mm.name : undefined,
+    posX: clampNum(mm.posX, 0, 100, 50),
+    posY: clampNum(mm.posY, 0, 100, 50),
+    zoom: clampNum(mm.zoom, 1, 2.5, 1),
   }
 }
 
@@ -547,12 +560,29 @@ export function normalizeProject(data: unknown): Project | null {
   }
   // Carrossel sem nenhum slide é válido (a pessoa pode ter excluído todos):
   // só recusa quando o arquivo nem tinha uma lista de slides utilizável.
+  const rawFont = (p as { customFont?: unknown }).customFont
+  const customFont: CustomFont | null =
+    typeof rawFont === 'object' &&
+    rawFont !== null &&
+    typeof (rawFont as CustomFont).dataUrl === 'string' &&
+    (rawFont as CustomFont).dataUrl.startsWith('data:')
+      ? {
+          name:
+            typeof (rawFont as CustomFont).name === 'string' &&
+            (rawFont as CustomFont).name !== ''
+              ? (rawFont as CustomFont).name
+              : 'Minha fonte',
+          dataUrl: (rawFont as CustomFont).dataUrl,
+        }
+      : null
   return {
     title:
       typeof p.title === 'string' && p.title.trim() !== ''
         ? p.title
         : 'Carrossel sem título',
-    font: p.font === 'sans' ? 'sans' : 'serif',
+    font:
+      p.font === 'sans' ? 'sans' : p.font === 'custom' && customFont ? 'custom' : 'serif',
+    customFont,
     captionLeft: typeof p.captionLeft === 'string' ? p.captionLeft : '',
     captionRight: typeof p.captionRight === 'string' ? p.captionRight : '',
     slides,

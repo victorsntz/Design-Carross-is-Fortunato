@@ -30,7 +30,7 @@ export function slideHasVideo(slide: Slide): boolean {
 async function posterizeSlide(slide: Slide): Promise<Slide> {
   const fix = async (m: SlideMedia | null): Promise<SlideMedia | null> =>
     m && m.kind === 'video'
-      ? { kind: 'image', src: await videoPosterFrame(m.src), name: m.name }
+      ? { ...m, kind: 'image', src: await videoPosterFrame(m.src) }
       : m
   if (slide.type === 'split') {
     return {
@@ -129,18 +129,28 @@ function mediaLayers(slide: Slide): MediaLayer[] {
 interface Drawable {
   el: HTMLVideoElement | HTMLImageElement
   rect: Rect
+  media: SlideMedia
 }
 
+/** Mesma conta do mediaFrameStyle do renderer — o vídeo composto no canvas
+ *  sai com o MESMO enquadramento (posição + zoom) do preview. */
 function drawCover(ctx: CanvasRenderingContext2D, d: Drawable): void {
   const el = d.el
   const sw = el instanceof HTMLVideoElement ? el.videoWidth : el.naturalWidth
   const sh = el instanceof HTMLVideoElement ? el.videoHeight : el.naturalHeight
   if (!sw || !sh) return
-  const scale = Math.max(d.rect.w / sw, d.rect.h / sh)
+  const px = (d.media.posX ?? 50) / 100
+  const py = (d.media.posY ?? 50) / 100
+  const z = d.media.zoom ?? 1
+  const bx = d.rect.x - (z - 1) * d.rect.w * px
+  const by = d.rect.y - (z - 1) * d.rect.h * py
+  const bw = d.rect.w * z
+  const bh = d.rect.h * z
+  const scale = Math.max(bw / sw, bh / sh)
   const dw = sw * scale
   const dh = sh * scale
-  const dx = d.rect.x + (d.rect.w - dw) / 2
-  const dy = d.rect.y + (d.rect.h - dh) / 2
+  const dx = bx + (bw - dw) * px
+  const dy = by + (bh - dh) * py
   ctx.save()
   ctx.beginPath()
   ctx.rect(d.rect.x, d.rect.y, d.rect.w, d.rect.h)
@@ -220,12 +230,12 @@ export async function exportSlideVideo(
     if (layer.media.kind === 'video') {
       const el = await loadVideoEl(layer.media.src)
       videos.push(el)
-      drawables.push({ el, rect: layer.rect })
+      drawables.push({ el, rect: layer.rect, media: layer.media })
     } else {
       const el = new Image()
       el.src = layer.media.src
       await el.decode()
-      drawables.push({ el, rect: layer.rect })
+      drawables.push({ el, rect: layer.rect, media: layer.media })
     }
   }
 

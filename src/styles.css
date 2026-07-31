@@ -131,6 +131,21 @@ body {
   color: var(--text-dim);
 }
 
+/* "Meus carrosséis" é gaveta de arquivos, não design: cor própria */
+.card--library {
+  border-color: rgba(111, 199, 189, 0.45);
+  background: #1c2321;
+}
+
+.card--library .card-title {
+  color: #6fc7bd;
+}
+
+.card--library .project-item--active,
+.card--library .project-item:hover {
+  border-color: #6fc7bd;
+}
+
 .slide-panel-header {
   display: flex;
   align-items: center;
@@ -356,6 +371,11 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.adjust-group {
+  display: flex;
+  gap: 4px;
 }
 
 .stepper-dots {
@@ -654,9 +674,13 @@ body {
   background: transparent;
 }
 
-/* escolha de fonte do carrossel: serifada (padrão) ou sem serifa */
+/* escolha de fonte do carrossel: serifada (padrão), sem serifa ou a da pessoa */
 .sl-font--sans {
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.sl-font--custom {
+  font-family: 'FontePersonalizada', 'STIX Two Text', 'Times New Roman', serif;
 }
 
 /* assinaturas do topo (sans-serif, contraste com a serifa do texto) */

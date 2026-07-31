@@ -1,4 +1,4 @@
-# Criador de Carrosséis
+# Criador Fortunato
 
 Editor web para montar carrosséis no formato da metodologia: **comparação → desenvolvimento → final**.
 O design já vem pronto e travado — quem usa só troca fotos, vídeos e textos apertando botões.

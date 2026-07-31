@@ -54,6 +54,26 @@ interface RendererProps {
   thumbnail?: boolean
 }
 
+/**
+ * Enquadramento sem nunca deixar fundo aparecer: a caixa da mídia é
+ * `zoom`x o contêiner e desliza no máximo até as bordas coincidirem.
+ * A exportação de vídeo usa exatamente a mesma conta no canvas.
+ */
+export function mediaFrameStyle(media: SlideMedia): CSSProperties {
+  const px = media.posX ?? 50
+  const py = media.posY ?? 50
+  const z = media.zoom ?? 1
+  return {
+    position: 'absolute',
+    width: `${z * 100}%`,
+    height: `${z * 100}%`,
+    left: `${-(z - 1) * px}%`,
+    top: `${-(z - 1) * py}%`,
+    objectFit: 'cover',
+    objectPosition: `${px}% ${py}%`,
+  }
+}
+
 function MediaEl({
   media,
   className,
@@ -64,10 +84,12 @@ function MediaEl({
   /** Miniaturas não tocam o vídeo (só mostram o primeiro frame). */
   still?: boolean
 }) {
+  const style = mediaFrameStyle(media)
   if (media.kind === 'video') {
     return (
       <video
         className={className}
+        style={style}
         src={media.src}
         muted
         loop
@@ -78,7 +100,7 @@ function MediaEl({
       />
     )
   }
-  return <img className={className} src={media.src} alt="" />
+  return <img className={className} style={style} src={media.src} alt="" />
 }
 
 function Captions({ project }: { project: Project }) {

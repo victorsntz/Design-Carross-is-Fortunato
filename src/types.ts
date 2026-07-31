@@ -5,6 +5,11 @@ export interface SlideMedia {
   /** Imagens: dataURL (persiste). Vídeos: objectURL (só vale na sessão atual). */
   src: string
   name?: string
+  /** Enquadramento: posição do recorte em % (0-100, padrão 50 = centro). */
+  posX?: number
+  posY?: number
+  /** Zoom do recorte (1 = cobre exato; máx 2.5). Nunca descola das margens. */
+  zoom?: number
 }
 
 export type SlideType = 'split' | 'comparison' | 'development' | 'book' | 'final'
@@ -67,14 +72,21 @@ export type Slide =
   | BookSlide
   | FinalSlide
 
-/** Fonte dos textos dos slides: serifada (STIX) ou sem serifa (Helvetica). */
-export type FontStyle = 'serif' | 'sans'
+/** Fonte dos slides: serifada (STIX), sem serifa (Helvetica) ou a da pessoa. */
+export type FontStyle = 'serif' | 'sans' | 'custom'
+
+/** Arquivo de fonte enviado pela pessoa (TTF/OTF/WOFF), guardado no projeto. */
+export interface CustomFont {
+  name: string
+  dataUrl: string
+}
 
 export interface Project {
   /** Nome do carrossel, mostrado na lista "Meus carrosséis". */
   title: string
   /** Vale pra todos os textos de todos os slides. */
   font: FontStyle
+  customFont: CustomFont | null
   /** Assinatura pequena no topo esquerdo de todos os slides. */
   captionLeft: string
   /** Assinatura pequena no topo direito de todos os slides. */
