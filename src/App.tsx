@@ -901,16 +901,78 @@ export default function App() {
     })
   }
 
-  function exportZip() {
-    if (!confirmExampleCaptions()) return
+  /** Confirmações comuns antes de exportar o carrossel inteiro. */
+  function confirmExportAll(): boolean {
+    if (!confirmExampleCaptions()) return false
     if (
       project.slides.some(slideHasVideo) &&
       !window.confirm(
-        'Slides com vídeo entram no ZIP como imagem parada (um frame). O vídeo pronto você baixa slide a slide, no botão "Exportar vídeo". Continuar?',
+        'Slides com vídeo saem como imagem parada (um frame). O vídeo pronto você baixa slide a slide, no botão "Exportar vídeo". Continuar?',
       )
     ) {
+      return false
+    }
+    return true
+  }
+
+  /** Nome de pasta legível a partir do título (sem caracteres proibidos). */
+  function folderName(): string {
+    return (
+      project.title.replace(/[/\\:*?"<>|]/g, '-').trim() || slugify(project.title)
+    )
+  }
+
+  /**
+   * Salvar todos: cria uma pasta com o nome do título (Chrome/Edge) ou, sem
+   * suporte, baixa os PNGs um a um pra pessoa guardar onde quiser.
+   */
+  function exportAllSlides() {
+    if (!confirmExportAll()) return
+    const picker = (
+      window as unknown as {
+        showDirectoryPicker?: (opts?: unknown) => Promise<FileSystemDirectoryHandle>
+      }
+    ).showDirectoryPicker
+    if (typeof picker === 'function') {
+      // o seletor precisa abrir ainda dentro do clique do usuário
+      void picker({ mode: 'readwrite' })
+        .then((dir) =>
+          run('Salvando slides…', async () => {
+            const sub = await dir.getDirectoryHandle(folderName(), { create: true })
+            const total = project.slides.length
+            for (let i = 0; i < total; i++) {
+              setBusy(`Salvando slide ${i + 1} de ${total}…`)
+              const blob = await exportSlidePng(project.slides[i], project)
+              const fh = await sub.getFileHandle(
+                `slide-${String(i + 1).padStart(2, '0')}.png`,
+                { create: true },
+              )
+              const w = await fh.createWritable()
+              await w.write(blob)
+              await w.close()
+            }
+            window.alert(`Pronto! ${total} slides salvos na pasta "${folderName()}".`)
+          }),
+        )
+        .catch(() => {
+          // pessoa cancelou o seletor de pasta: não faz nada
+        })
       return
     }
+    // Sem suporte a pastas: baixa os PNGs individualmente, numerados
+    void run('Baixando slides…', async () => {
+      const total = project.slides.length
+      for (let i = 0; i < total; i++) {
+        setBusy(`Baixando slide ${i + 1} de ${total}…`)
+        const blob = await exportSlidePng(project.slides[i], project)
+        downloadBlob(blob, `${slideFileName(i)}.png`)
+        await new Promise((r) => setTimeout(r, 350))
+      }
+    })
+  }
+
+  function exportZip() {
+    if (!confirmExportAll()) return
     void run('Gerando todos os PNGs…', async () => {
       const blob = await exportAllPngZip(project, (done, total) =>
         setBusy(`Gerando PNGs… ${done}/${total}`),
@@ -1085,10 +1147,21 @@ export default function App() {
                 aria-label="Título do carrossel"
               />
             </label>
-            <button type="button" className="btn btn--primary btn--full" onClick={exportZip}>
-              Baixar todos os slides (ZIP)
+            <button
+              type="button"
+              className="btn btn--primary btn--full"
+              onClick={exportAllSlides}
+            >
+              Salvar todos os slides
             </button>
-            <p className="hint">PNGs de 1080×1350, prontos pro Instagram.</p>
+            <div className="control-row">
+              <span className="hint">
+                Cria uma pasta com o nome do título. PNGs 1080×1350.
+              </span>
+              <button type="button" className="btn btn--small" onClick={exportZip}>
+                .zip
+              </button>
+            </div>
           </section>
 
           <section className="card">

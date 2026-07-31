@@ -22,7 +22,8 @@ Nada de arrastar elementos: a diagramação nunca quebra.
 - **Vídeo direto no slide**: sobe o vídeo, ele vira o fundo do slide, e o app exporta o
   vídeo pronto com a arte (textos, borda, granulado) por cima — sem precisar de Figma + editor.
 - **Exportações**:
-  - PNG 1080×1350 por slide, ou todos de uma vez em ZIP
+  - PNG 1080×1350 por slide; "Salvar todos" cria uma pasta com o nome do
+    título (Chrome/Edge) ou baixa os PNGs numerados um a um — e ainda tem o .zip
   - Vídeo do slide com o áudio original (MP4 no Chrome; WebM em navegadores sem
     suporte a MP4); trocar de aba pausa a gravação e ela retoma quando você volta
   - Arte transparente (PNG sem a mídia) pra compor sobre vídeo em qualquer editor
