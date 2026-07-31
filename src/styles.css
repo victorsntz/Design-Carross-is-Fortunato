@@ -170,7 +170,9 @@ body {
 
 .field textarea,
 .field input[type='text'] {
-  resize: vertical;
+  /* a caixa cresce sozinha com o conteúdo — nada de rolagem interna */
+  resize: none;
+  overflow: hidden;
   background: var(--card-2);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -832,8 +834,8 @@ body {
   top: 150px;
 }
 
-/* desenvolvimento: foto de fundo + sombra forte + coluna de texto à direita,
-   alinhado à esquerda e ancorado embaixo */
+/* desenvolvimento 1: foto de fundo + sombra forte + texto alinhado à
+   esquerda, de fora a fora, ancorado embaixo */
 .sl-dev-scrim {
   position: absolute;
   inset: 0;
@@ -847,7 +849,7 @@ body {
 
 .sl-dev {
   position: absolute;
-  left: 420px;
+  left: 95px;
   right: 95px;
   top: 160px;
   bottom: 150px;

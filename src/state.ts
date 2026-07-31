@@ -127,8 +127,7 @@ export function defaultProject(): Project {
 
   const dev1 = makeSlide('development') as DevelopmentSlide
   dev1.body =
-    'Aqui entra o desenvolvimento: você conecta os dados que mostrou e explica o que eles significam juntos. Parágrafos curtos, de duas ou três linhas — a pessoa lê no celular, com o dedo pronto pra deslizar.\n\nColoque uma foto de fundo neste slide: a sombra escura garante a leitura por cima dela.'
-  dev1.emphasis = 'A conclusão forte fecha em negrito.'
+    'Aqui entra o desenvolvimento: você conecta os dados que mostrou e explica o que eles significam juntos. Parágrafos curtos, de duas ou três linhas — a pessoa lê no celular, com o dedo pronto pra deslizar.\n\nColoque uma foto de fundo neste slide: a sombra escura garante a leitura por cima dela.\n\n**A conclusão forte fecha em negrito.**'
 
   const split5 = split(
     'No meio do carrossel dá pra voltar pra comparação, no mesmo padrão dos primeiros pares.',
@@ -519,11 +518,22 @@ export function normalizeProject(data: unknown): Project | null {
         merged.text = str(merged.text, '')
         merged.textPosition = merged.textPosition === 'top' ? 'top' : 'bottom'
         break
-      case 'development':
+      case 'development': {
         merged.media = sanitizeMedia(merged.media)
         merged.body = str(merged.body, '')
-        merged.emphasis = str(merged.emphasis, '')
+        // O campo separado de fechamento virou parte do texto único:
+        // migra rascunhos antigos juntando em negrito no fim.
+        const emphasis = str(merged.emphasis, '').trim()
+        if (emphasis !== '') {
+          const bolded =
+            emphasis.startsWith('**') && emphasis.endsWith('**')
+              ? emphasis
+              : `**${emphasis}**`
+          merged.body = merged.body.trim() === '' ? bolded : `${merged.body}\n\n${bolded}`
+        }
+        merged.emphasis = ''
         break
+      }
       case 'book':
         merged.media = sanitizeMedia(merged.media)
         merged.body = str(merged.body, '')

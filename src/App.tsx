@@ -120,6 +120,85 @@ function formatWhen(ts: number): string {
   })
 }
 
+/**
+ * Textarea que cresce com o conteúdo (nada de rolagem em caixinha) e aceita
+ * Ctrl/Cmd+B, +I e +U pra formatar a seleção com **negrito**, *itálico* e
+ * _sublinhado_.
+ */
+function AutoTextarea({
+  value,
+  onValueChange,
+  minRows = 2,
+  ...rest
+}: {
+  value: string
+  onValueChange: (v: string) => void
+  minRows?: number
+} & Omit<
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+  'value' | 'onChange' | 'rows'
+>) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const pendingSel = useRef<{ start: number; end: number } | null>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight + 2}px`
+    if (pendingSel.current) {
+      el.setSelectionRange(pendingSel.current.start, pendingSel.current.end)
+      pendingSel.current = null
+    }
+  }, [value])
+
+  const applyFormat = (marker: string) => {
+    const el = ref.current
+    if (!el) return
+    const s = el.selectionStart
+    const e = el.selectionEnd
+    const sel = value.slice(s, e)
+    const before = value.slice(0, s)
+    const after = value.slice(e)
+    const m = marker.length
+    if (before.endsWith(marker) && after.startsWith(marker)) {
+      // já formatado por fora: desfaz
+      onValueChange(before.slice(0, -m) + sel + after.slice(m))
+      pendingSel.current = { start: s - m, end: e - m }
+    } else if (
+      sel.length >= 2 * m &&
+      sel.startsWith(marker) &&
+      sel.endsWith(marker)
+    ) {
+      // seleção inclui os marcadores: desfaz
+      onValueChange(before + sel.slice(m, -m) + after)
+      pendingSel.current = { start: s, end: e - 2 * m }
+    } else {
+      onValueChange(before + marker + sel + marker + after)
+      pendingSel.current = { start: s + m, end: e + m }
+    }
+  }
+
+  return (
+    <textarea
+      {...rest}
+      ref={ref}
+      rows={minRows}
+      value={value}
+      onChange={(e) => onValueChange(e.target.value)}
+      onKeyDown={(e) => {
+        if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+          const k = e.key.toLowerCase()
+          if (k === 'b' || k === 'i' || k === 'u') {
+            e.preventDefault()
+            applyFormat(k === 'b' ? '**' : k === 'i' ? '*' : '_')
+          }
+        }
+      }}
+    />
+  )
+}
+
 function FileButton({
   label,
   accept,
@@ -411,36 +490,80 @@ export default function App() {
       if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
         return
       }
+      const current = project.slides.find((s) => s.id === selectedId) ?? project.slides[0]
+      if (!current) return
+
       const item = Array.from(e.clipboardData?.items ?? []).find((i) =>
         i.type.startsWith('image/'),
       )
-      if (!item) return
-      const file = item.getAsFile()
-      if (!file) return
-      const current = project.slides.find((s) => s.id === selectedId) ?? project.slides[0]
-      if (!current) return
-      let slot: MediaSlot | null = null
-      let occupied = false
-      if (current.type === 'split') {
-        if (!current.top.media) slot = 'top'
-        else if (!current.bottom.media) slot = 'bottom'
-        else {
-          slot = 'top'
-          occupied = true
+      if (item) {
+        const file = item.getAsFile()
+        if (!file) return
+        let slot: MediaSlot | null = null
+        let occupied = false
+        if (current.type === 'split') {
+          // primeiro V preenche a metade de cima, o segundo a de baixo
+          if (!current.top.media) slot = 'top'
+          else if (!current.bottom.media) slot = 'bottom'
+          else {
+            slot = 'top'
+            occupied = true
+          }
+        } else if ('media' in current) {
+          slot = 'media'
+          occupied = current.media !== null
         }
-      } else if ('media' in current) {
-        slot = 'media'
-        occupied = current.media !== null
+        if (!slot) return
+        e.preventDefault()
+        if (
+          occupied &&
+          !window.confirm('Este slide já tem foto. Substituir pela imagem colada?')
+        ) {
+          return
+        }
+        void setSlideMediaFromFile(current.id, slot, file)
+        return
       }
-      if (!slot) return
+
+      // Sem imagem no clipboard: texto colado vai direto pro bloco de texto
+      const text = e.clipboardData?.getData('text/plain')?.trim()
+      if (!text) return
       e.preventDefault()
+      if (current.type === 'split') {
+        const target =
+          current.top.text.trim() === ''
+            ? 'top'
+            : current.bottom.text.trim() === ''
+              ? 'bottom'
+              : null
+        const slot2 =
+          target ??
+          (window.confirm('As duas metades já têm texto. Substituir o da metade de cima?')
+            ? 'top'
+            : null)
+        if (!slot2) return
+        updateSlide(current.id, (s) =>
+          s.type === 'split' ? ({ ...s, [slot2]: { ...s[slot2], text } } as Slide) : s,
+        )
+        return
+      }
+      const currentText =
+        current.type === 'development' || current.type === 'book'
+          ? current.body
+          : 'text' in current
+            ? current.text
+            : ''
       if (
-        occupied &&
-        !window.confirm('Este slide já tem foto. Substituir pela imagem colada?')
+        currentText.trim() !== '' &&
+        !window.confirm('Este slide já tem texto. Substituir pelo colado?')
       ) {
         return
       }
-      void setSlideMediaFromFile(current.id, slot, file)
+      updateSlide(current.id, (s) => {
+        if (s.type === 'development' || s.type === 'book') return { ...s, body: text }
+        if ('text' in s) return { ...s, text } as Slide
+        return s
+      })
     }
     document.addEventListener('paste', onPaste)
     return () => document.removeEventListener('paste', onPaste)
@@ -790,22 +913,16 @@ export default function App() {
             <p className="hint">Aparecem em todos os slides.</p>
             <label className="field">
               <span>Esquerda</span>
-              <textarea
-                rows={2}
+              <AutoTextarea
                 value={project.captionLeft}
-                onChange={(e) =>
-                  setProject((p) => ({ ...p, captionLeft: e.target.value }))
-                }
+                onValueChange={(v) => setProject((p) => ({ ...p, captionLeft: v }))}
               />
             </label>
             <label className="field">
               <span>Direita</span>
-              <textarea
-                rows={2}
+              <AutoTextarea
                 value={project.captionRight}
-                onChange={(e) =>
-                  setProject((p) => ({ ...p, captionRight: e.target.value }))
-                }
+                onValueChange={(v) => setProject((p) => ({ ...p, captionRight: v }))}
               />
             </label>
           </section>
@@ -991,16 +1108,12 @@ export default function App() {
                       </div>
                       <label className="field">
                         <span>Texto</span>
-                        <textarea
-                          rows={2}
+                        <AutoTextarea
                           value={half.text}
-                          onChange={(e) =>
+                          onValueChange={(v) =>
                             updateSlide(selected.id, (s) =>
                               s.type === 'split'
-                                ? ({
-                                    ...s,
-                                    [slot]: { ...s[slot], text: e.target.value },
-                                  } as Slide)
+                                ? ({ ...s, [slot]: { ...s[slot], text: v } } as Slide)
                                 : s,
                             )
                           }
@@ -1019,53 +1132,34 @@ export default function App() {
                   {selected.type === 'comparison' && (
                     <label className="field">
                       <span>Frase do slide</span>
-                      <textarea
-                        rows={3}
+                      <AutoTextarea
                         value={(selected as ComparisonSlide).text}
-                        onChange={(e) =>
-                          updateSlide(selected.id, (s) => ({ ...s, text: e.target.value }))
+                        onValueChange={(v) =>
+                          updateSlide(selected.id, (s) => ({ ...s, text: v }))
                         }
                       />
                     </label>
                   )}
                   {selected.type === 'development' && (
-                    <>
-                      <label className="field">
-                        <span>Parágrafos (linha em branco separa)</span>
-                        <textarea
-                          rows={9}
-                          value={(selected as DevelopmentSlide).body}
-                          onChange={(e) =>
-                            updateSlide(selected.id, (s) => ({
-                              ...s,
-                              body: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                      <label className="field">
-                        <span>Frase de fechamento (negrito)</span>
-                        <textarea
-                          rows={2}
-                          value={(selected as DevelopmentSlide).emphasis}
-                          onChange={(e) =>
-                            updateSlide(selected.id, (s) => ({
-                              ...s,
-                              emphasis: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                    </>
+                    <label className="field">
+                      <span>Parágrafos (linha em branco separa)</span>
+                      <AutoTextarea
+                        minRows={6}
+                        value={(selected as DevelopmentSlide).body}
+                        onValueChange={(v) =>
+                          updateSlide(selected.id, (s) => ({ ...s, body: v }))
+                        }
+                      />
+                    </label>
                   )}
                   {selected.type === 'book' && (
                     <label className="field">
                       <span>Parágrafos (linha em branco separa)</span>
-                      <textarea
-                        rows={7}
+                      <AutoTextarea
+                        minRows={5}
                         value={(selected as BookSlide).body}
-                        onChange={(e) =>
-                          updateSlide(selected.id, (s) => ({ ...s, body: e.target.value }))
+                        onValueChange={(v) =>
+                          updateSlide(selected.id, (s) => ({ ...s, body: v }))
                         }
                       />
                     </label>
@@ -1073,16 +1167,20 @@ export default function App() {
                   {selected.type === 'final' && (
                     <label className="field">
                       <span>Convite (“Me segue se…”)</span>
-                      <textarea
-                        rows={4}
+                      <AutoTextarea
+                        minRows={3}
                         value={(selected as FinalSlide).text}
-                        onChange={(e) =>
-                          updateSlide(selected.id, (s) => ({ ...s, text: e.target.value }))
+                        onValueChange={(v) =>
+                          updateSlide(selected.id, (s) => ({ ...s, text: v }))
                         }
                       />
                     </label>
                   )}
-                  <p className="hint">**negrito** · *itálico* · _sublinhado_</p>
+                  <p className="hint">
+                    Selecione uma palavra e use Ctrl+B (negrito), Ctrl+I (itálico) ou
+                    Ctrl+U (sublinhado) — ou escreva **negrito**, *itálico*,
+                    _sublinhado_.
+                  </p>
                 </section>
               )}
 
