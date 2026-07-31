@@ -1132,6 +1132,17 @@ export default function App() {
             Salvo automaticamente neste navegador
           </span>
         )}
+        <button
+          type="button"
+          className="btn btn--small"
+          title="Sair do Criador"
+          onClick={() => {
+            localStorage.removeItem('criador-acesso')
+            window.location.reload()
+          }}
+        >
+          Sair
+        </button>
       </header>
 
       <div className="workspace">

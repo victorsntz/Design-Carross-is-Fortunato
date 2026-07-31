@@ -6,9 +6,12 @@ import '@fontsource/stix-two-text/700.css'
 import '@fontsource/stix-two-text/700-italic.css'
 import './styles.css'
 import App from './App'
+import Gate from './Gate'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <Gate>
+      <App />
+    </Gate>
   </React.StrictMode>,
 )
