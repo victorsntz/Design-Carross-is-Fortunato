@@ -401,9 +401,35 @@ body {
   gap: 8px;
 }
 
-.adjust-group {
+/* barrinhas de enquadramento */
+.media-adjust {
   display: flex;
-  gap: 4px;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-row span {
+  font-size: 10px;
+  color: var(--text-dim);
+  width: 48px;
+  flex-shrink: 0;
+}
+
+.slider-row span:last-child {
+  text-align: right;
+}
+
+.slider-row input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .stepper-dots {

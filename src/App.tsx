@@ -154,8 +154,17 @@ function AutoTextarea({
   const applyFormat = (marker: string) => {
     const el = ref.current
     if (!el) return
-    const s = el.selectionStart
-    const e = el.selectionEnd
+    // Ajusta a seleção pra formatação funcionar em palavra, frase ou trecho:
+    // apara espaços das bordas e expande seleção que parou no meio de uma
+    // palavra até as bordas dela (como editores de texto fazem).
+    const isWord = (ch: string | undefined) =>
+      ch !== undefined && /[\p{L}\p{N}_]/u.test(ch)
+    let s = el.selectionStart
+    let e = el.selectionEnd
+    while (s < e && /\s/.test(value[s])) s++
+    while (e > s && /\s/.test(value[e - 1])) e--
+    while (s > 0 && isWord(value[s - 1]) && isWord(value[s])) s--
+    while (e < value.length && isWord(value[e - 1]) && isWord(value[e])) e++
     const sel = value.slice(s, e)
     const before = value.slice(0, s)
     const after = value.slice(e)
@@ -235,8 +244,8 @@ function FileButton({
  * (ele some atrás da tela de carregamento e quando não há slide).
  */
 /**
- * Enquadramento da foto: setas movem o recorte, +/− dá zoom. Os limites
- * garantem que a foto nunca descola das margens do espaço dela.
+ * Enquadramento da foto por barrinhas: arrasta a bolinha até onde quiser.
+ * Os limites das barras são as próprias margens — a foto nunca descola.
  */
 function MediaAdjust({
   media,
@@ -248,71 +257,10 @@ function MediaAdjust({
   const px = media.posX ?? 50
   const py = media.posY ?? 50
   const z = media.zoom ?? 1
-  const STEP = 10
-  const ZSTEP = 0.25
-  const ZMAX = 2.5
   return (
-    <div className="control-row control-row--wrap">
-      <span className="control-label">Enquadrar</span>
-      <span className="adjust-group">
-        <button
-          type="button"
-          className="btn-icon"
-          title="Mostrar mais a esquerda da foto"
-          disabled={px <= 0}
-          onClick={() => onChange({ posX: Math.max(0, px - STEP) })}
-        >
-          ←
-        </button>
-        <button
-          type="button"
-          className="btn-icon"
-          title="Mostrar mais a direita da foto"
-          disabled={px >= 100}
-          onClick={() => onChange({ posX: Math.min(100, px + STEP) })}
-        >
-          →
-        </button>
-        <button
-          type="button"
-          className="btn-icon"
-          title="Mostrar mais o topo da foto"
-          disabled={py <= 0}
-          onClick={() => onChange({ posY: Math.max(0, py - STEP) })}
-        >
-          ↑
-        </button>
-        <button
-          type="button"
-          className="btn-icon"
-          title="Mostrar mais a base da foto"
-          disabled={py >= 100}
-          onClick={() => onChange({ posY: Math.min(100, py + STEP) })}
-        >
-          ↓
-        </button>
-      </span>
-      <span className="adjust-group">
-        <button
-          type="button"
-          className="btn-icon"
-          title="Menos zoom"
-          disabled={z <= 1}
-          onClick={() => onChange({ zoom: Math.max(1, Math.round((z - ZSTEP) * 100) / 100) })}
-        >
-          −
-        </button>
-        <button
-          type="button"
-          className="btn-icon"
-          title="Mais zoom"
-          disabled={z >= ZMAX}
-          onClick={() =>
-            onChange({ zoom: Math.min(ZMAX, Math.round((z + ZSTEP) * 100) / 100) })
-          }
-        >
-          +
-        </button>
+    <div className="media-adjust">
+      <div className="control-row">
+        <span className="control-label">Enquadrar</span>
         <button
           type="button"
           className="btn-icon"
@@ -322,7 +270,46 @@ function MediaAdjust({
         >
           ⟲
         </button>
-      </span>
+      </div>
+      <div className="slider-row">
+        <span>Esquerda</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={px}
+          aria-label="Enquadramento horizontal"
+          onChange={(e) => onChange({ posX: Number(e.target.value) })}
+        />
+        <span>Direita</span>
+      </div>
+      <div className="slider-row">
+        <span>Cima</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={py}
+          aria-label="Enquadramento vertical"
+          onChange={(e) => onChange({ posY: Number(e.target.value) })}
+        />
+        <span>Baixo</span>
+      </div>
+      <div className="slider-row">
+        <span>Zoom −</span>
+        <input
+          type="range"
+          min={1}
+          max={2.5}
+          step={0.05}
+          value={z}
+          aria-label="Zoom"
+          onChange={(e) => onChange({ zoom: Number(e.target.value) })}
+        />
+        <span>Zoom +</span>
+      </div>
     </div>
   )
 }
