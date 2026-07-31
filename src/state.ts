@@ -4,7 +4,6 @@ import type {
   CustomFont,
   DevelopmentSlide,
   FinalSlide,
-  FontStyle,
   Project,
   Slide,
   SlideMedia,
@@ -126,29 +125,31 @@ export function defaultProject(): Project {
     ),
   ]
 
+  // 5º ao 10º: Desenvolvimento 1 e 2 alternando, sempre com instruções —
+  // o texto de exemplo vai ensinando o jeito de fazer o conteúdo.
   const dev1 = makeSlide('development') as DevelopmentSlide
   dev1.body =
     'Aqui entra o desenvolvimento: você conecta os dados que mostrou e explica o que eles significam juntos. Parágrafos curtos, de duas ou três linhas — a pessoa lê no celular, com o dedo pronto pra deslizar.\n\nColoque uma foto de fundo neste slide: a sombra escura garante a leitura por cima dela.\n\n**A conclusão forte fecha em negrito.**'
 
-  const split5 = split(
-    'No meio do carrossel dá pra voltar pra comparação, no mesmo padrão dos primeiros pares.',
-    'Alternando com os desenvolvimentos, o ritmo da leitura não cansa.',
-  )
+  const duo1 = makeSlide('final') as FinalSlide
+  duo1.text =
+    'O Desenvolvimento 2 é o respiro: frase curta à esquerda, foto forte à direita. Intercale com os blocos de texto corrido pra leitura não cansar.'
 
   const dev2 = makeSlide('development') as DevelopmentSlide
   dev2.body =
-    'O segundo desenvolvimento aprofunda: mais contexto, mais consequência. Use **negrito**, *itálico* e _sublinhado_ quando precisar.'
+    'O segundo bloco de desenvolvimento aprofunda: mais contexto, mais consequência. Use **negrito**, *itálico* e _sublinhado_ quando precisar.'
 
-  const split6 = split(
-    'Mais um par de comparação pra sustentar o argumento.',
-    'O contraste continua fazendo o trabalho pesado.',
-  )
+  const duo2 = makeSlide('final') as FinalSlide
+  duo2.text =
+    'Mais um respiro aqui: quanto mais denso o carrossel, mais esses intervalos importam.'
 
   const dev3 = makeSlide('development') as DevelopmentSlide
   dev3.body =
-    'O último desenvolvimento amarra o argumento e prepara o convite final do próximo slide.'
+    'O último desenvolvimento amarra o argumento e prepara o convite do slide final.'
 
-  const fin = makeSlide('final') as FinalSlide
+  const cta = makeSlide('final') as FinalSlide
+  cta.text =
+    'Me segue se você acha que *este assunto* merece mais atenção do que vem recebendo. Toda semana tem uma conversa dessas aberta aqui.'
 
   return {
     title: 'Meu primeiro carrossel',
@@ -156,62 +157,7 @@ export function defaultProject(): Project {
     customFont: null,
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
-    slides: [...splits, dev1, split5, dev2, split6, dev3, fin],
-  }
-}
-
-/**
- * Estrutura do método com os textos em branco: é o que "+ Novo carrossel"
- * cria. O baralho-tutorial (defaultProject) aparece só na primeira visita.
- */
-export function blankProject(base?: {
-  captionLeft: string
-  captionRight: string
-  font: FontStyle
-  customFont: CustomFont | null
-}): Project {
-  const structure: SlideType[] = [
-    'split',
-    'split',
-    'split',
-    'split',
-    'development',
-    'split',
-    'development',
-    'split',
-    'development',
-    'final',
-  ]
-  const slides = structure.map((t) => {
-    const s = makeSlide(t)
-    switch (s.type) {
-      case 'split':
-        s.top.text = ''
-        s.bottom.text = ''
-        break
-      case 'comparison':
-        s.text = ''
-        break
-      case 'development':
-        s.body = ''
-        s.emphasis = ''
-        break
-      case 'book':
-        s.body = ''
-        break
-      case 'final':
-        s.text = ''
-        break
-    }
-    return s
-  })
-  return {
-    title: 'Novo carrossel',
-    font: base?.font ?? 'serif',
-    customFont: base?.customFont ?? null,
-    captionLeft: base?.captionLeft ?? '',
-    captionRight: base?.captionRight ?? '',
-    slides,
+    slides: [...splits, dev1, duo1, dev2, duo2, dev3, cta],
   }
 }
 

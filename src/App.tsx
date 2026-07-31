@@ -12,7 +12,6 @@ import type {
 } from './types'
 import { SlideRenderer, SIZE_STEPS } from './components/SlideRenderer'
 import {
-  blankProject,
   defaultProject,
   deleteProjectFromStorage,
   listProjects,
@@ -968,16 +967,23 @@ export default function App() {
     }
   }
 
+  /**
+   * Carrossel novo = estrutura padrão COM as instruções (elas ensinam o
+   * método), herdando assinaturas e fonte que a pessoa já configurou.
+   */
+  function freshCarousel(): Project {
+    const p = defaultProject()
+    p.title = 'Novo carrossel'
+    p.captionLeft = projectRef.current.captionLeft
+    p.captionRight = projectRef.current.captionRight
+    p.font = projectRef.current.font
+    p.customFont = projectRef.current.customFont
+    return p
+  }
+
   async function newCarousel() {
     if (!(await saveBeforeLeaving())) return
-    // Estrutura do método com textos em branco, herdando as assinaturas que
-    // a pessoa já configurou — o baralho-tutorial só aparece na primeira vez.
-    const fresh = blankProject({
-      captionLeft: projectRef.current.captionLeft,
-      captionRight: projectRef.current.captionRight,
-      font: projectRef.current.font,
-      customFont: projectRef.current.customFont,
-    })
+    const fresh = freshCarousel()
     setProjectId(newId())
     replaceProject(fresh)
     setSelectedId(fresh.slides[0].id)
@@ -1008,12 +1014,7 @@ export default function App() {
     deletedIdsRef.current.add(id)
     await deleteProjectFromStorage(id)
     if (id === projectId) {
-      const fresh = blankProject({
-        captionLeft: projectRef.current.captionLeft,
-        captionRight: projectRef.current.captionRight,
-        font: projectRef.current.font,
-        customFont: projectRef.current.customFont,
-      })
+      const fresh = freshCarousel()
       setProjectId(newId())
       replaceProject(fresh)
       setSelectedId(fresh.slides[0].id)
@@ -1035,6 +1036,30 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="topbar-title">
+          <svg className="logo" viewBox="0 0 32 32" aria-hidden>
+            <rect x="1" y="1" width="30" height="30" rx="7" fill="#0b0b0b" />
+            <rect
+              x="5"
+              y="5"
+              width="22"
+              height="22"
+              rx="5"
+              fill="none"
+              stroke="#e4dccb"
+              strokeWidth="1.6"
+              strokeDasharray="3 2.4"
+            />
+            <text
+              x="16"
+              y="21.5"
+              fontFamily="Georgia, serif"
+              fontSize="13"
+              fill="#e4dccb"
+              textAnchor="middle"
+            >
+              C
+            </text>
+          </svg>
           <h1>Criador Fortunato</h1>
         </div>
         <button
@@ -1048,11 +1073,15 @@ export default function App() {
         </button>
         {draftFailed ? (
           <span className="save-status save-status--error">
+            <span className="save-dot save-dot--warn" />
             Não consegui salvar neste navegador — use “Baixar backup” pra não perder
             nada.
           </span>
         ) : (
-          <span className="save-status">Salvo automaticamente neste navegador</span>
+          <span className="save-status">
+            <span className="save-dot" />
+            Salvo automaticamente neste navegador
+          </span>
         )}
       </header>
 
