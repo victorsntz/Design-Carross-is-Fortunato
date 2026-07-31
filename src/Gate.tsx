@@ -176,7 +176,10 @@ export default function Gate({ children }: { children: ReactNode }) {
   if (state === 'checking') {
     return (
       <div className="gate">
-        <p className="hint">Carregando…</p>
+        <div className="gate-loading">
+          <Logo />
+          <p className="hint">Carregando…</p>
+        </div>
       </div>
     )
   }

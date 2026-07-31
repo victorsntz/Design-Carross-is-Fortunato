@@ -69,6 +69,24 @@ body {
   align-items: stretch;
 }
 
+.gate-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  animation: gate-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes gate-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 .gate-card h1 {
   margin: 0;
   font-size: 18px;
