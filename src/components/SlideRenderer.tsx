@@ -18,17 +18,28 @@ export const SLIDE_H = 1350
 /** Fração da largura ocupada pela foto no slide final. */
 export const FINAL_MEDIA_FRAC = 0.44
 
-export const SIZE_STEPS = 5
-export const DEFAULT_STEP = 2
-
 // Calibrado pra densidade real do formato: os slides carregam bastante
-// texto, então os padrões (índice 2) assumem parágrafos cheios.
+// texto, então os padrões assumem parágrafos cheios. Cada tipo tem sua
+// escala (o Desenvolvimento 2 desce até 28px pra textos bem longos).
 const FONT_SIZES: Record<Slide['type'], number[]> = {
   split: [28, 32, 36, 40, 45],
   comparison: [32, 36, 40, 45, 50],
   development: [26, 30, 34, 38, 43],
   book: [26, 30, 34, 38, 42],
-  final: [38, 43, 48, 54, 60],
+  final: [28, 33, 38, 43, 48, 54, 60],
+}
+
+/** Passo padrão de cada tipo (mantém o tamanho visual de sempre). */
+export const DEFAULT_STEPS: Record<Slide['type'], number> = {
+  split: 2,
+  comparison: 2,
+  development: 2,
+  book: 2,
+  final: 4,
+}
+
+export function sizeStepsFor(type: Slide['type']): number {
+  return FONT_SIZES[type].length
 }
 
 export function fontSizeFor(slide: Slide): number {

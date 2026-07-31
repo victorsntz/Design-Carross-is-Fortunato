@@ -10,7 +10,7 @@ import type {
   SlideType,
   SplitSlide,
 } from './types'
-import { SlideRenderer, SIZE_STEPS } from './components/SlideRenderer'
+import { SlideRenderer, sizeStepsFor } from './components/SlideRenderer'
 import {
   defaultProject,
   deleteProjectFromStorage,
@@ -754,7 +754,7 @@ export default function App() {
   function stepSize(id: string, delta: -1 | 1) {
     updateSlide(id, (s) => ({
       ...s,
-      sizeStep: Math.min(SIZE_STEPS - 1, Math.max(0, s.sizeStep + delta)),
+      sizeStep: Math.min(sizeStepsFor(s.type) - 1, Math.max(0, s.sizeStep + delta)),
     }))
   }
 
@@ -1420,7 +1420,7 @@ export default function App() {
                           A−
                         </button>
                         <span className="stepper-dots">
-                          {Array.from({ length: SIZE_STEPS }, (_, i) => (
+                          {Array.from({ length: sizeStepsFor(selected.type) }, (_, i) => (
                             <span
                               key={i}
                               className={i <= selected.sizeStep ? 'dot dot--on' : 'dot'}
@@ -1430,7 +1430,7 @@ export default function App() {
                         <button
                           type="button"
                           className="btn btn--small"
-                          disabled={selected.sizeStep >= SIZE_STEPS - 1}
+                          disabled={selected.sizeStep >= sizeStepsFor(selected.type) - 1}
                           onClick={() => stepSize(selected.id, 1)}
                         >
                           A+
@@ -1510,7 +1510,7 @@ export default function App() {
                         A−
                       </button>
                       <span className="stepper-dots">
-                        {Array.from({ length: SIZE_STEPS }, (_, i) => (
+                        {Array.from({ length: sizeStepsFor(selected.type) }, (_, i) => (
                           <span
                             key={i}
                             className={i <= selected.sizeStep ? 'dot dot--on' : 'dot'}
@@ -1520,7 +1520,7 @@ export default function App() {
                       <button
                         type="button"
                         className="btn btn--small"
-                        disabled={selected.sizeStep >= SIZE_STEPS - 1}
+                        disabled={selected.sizeStep >= sizeStepsFor(selected.type) - 1}
                         onClick={() => stepSize(selected.id, 1)}
                       >
                         A+

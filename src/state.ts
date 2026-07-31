@@ -11,7 +11,7 @@ import type {
   SplitHalf,
   SplitSlide,
 } from './types'
-import { DEFAULT_STEP } from './components/SlideRenderer'
+import { DEFAULT_STEPS, sizeStepsFor } from './components/SlideRenderer'
 
 // Rascunho automático fica no IndexedDB: fotos de 10-13 slides estouram os
 // ~5MB do localStorage, e perder o rascunho no reload é inaceitável.
@@ -44,7 +44,7 @@ export function newId(): string {
 }
 
 export function makeSlide(type: SlideType): Slide {
-  const base = { id: newId(), sizeStep: DEFAULT_STEP }
+  const base = { id: newId(), sizeStep: DEFAULT_STEPS[type] }
   switch (type) {
     case 'split': {
       const s: SplitSlide = {
@@ -461,8 +461,12 @@ export function normalizeProject(data: unknown): Project | null {
       typeof sl.id === 'string' && sl.id !== '' && !seenIds.has(sl.id) ? sl.id : newId()
     seenIds.add(merged.id)
     if (typeof merged.sizeStep !== 'number' || Number.isNaN(merged.sizeStep)) {
-      merged.sizeStep = DEFAULT_STEP
+      merged.sizeStep = DEFAULT_STEPS[merged.type]
     }
+    merged.sizeStep = Math.min(
+      Math.max(0, Math.round(merged.sizeStep)),
+      sizeStepsFor(merged.type) - 1,
+    )
     // Campos de texto precisam ser string de verdade: um .json editado na mão
     // (ou corrompido) não pode derrubar o app na hora de renderizar.
     switch (merged.type) {
