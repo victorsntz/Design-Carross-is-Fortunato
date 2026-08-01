@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type {
   BookSlide,
   ComparisonSlide,
@@ -10,7 +10,10 @@ import type {
   SplitHalf,
   SplitSlide,
 } from '../types'
-import { renderInline, renderParagraphs } from '../markdown'
+import { applyMarker, renderInline, renderParagraphs } from '../markdown'
+
+/** Campo de texto de um slide, pra edição direto na arte. */
+export type EditField = 'text' | 'body' | 'top' | 'bottom'
 
 export const SLIDE_W = 1080
 export const SLIDE_H = 1350
@@ -96,6 +99,108 @@ interface RendererProps {
   mode?: RenderMode
   /** Miniatura: vídeos ficam parados no primeiro frame. */
   thumbnail?: boolean
+  /** Com isso definido, os textos viram editáveis com clique direto na arte. */
+  onTextEdit?: (field: EditField, value: string) => void
+}
+
+/**
+ * Texto do slide que vira campo de edição ao clicar: mesma fonte, mesmo
+ * lugar, mesmos atalhos (Ctrl+B/I/U/E). Esc ou clicar fora conclui.
+ */
+function EditableText({
+  value,
+  onChange,
+  className,
+  style,
+  paragraphs = false,
+  placeholder,
+}: {
+  value: string
+  onChange?: (v: string) => void
+  className: string
+  style?: CSSProperties
+  paragraphs?: boolean
+  placeholder: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const pendingSel = useRef<{ start: number; end: number } | null>(null)
+
+  useEffect(() => {
+    if (!editing) return
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+    if (pendingSel.current) {
+      el.setSelectionRange(pendingSel.current.start, pendingSel.current.end)
+      pendingSel.current = null
+    }
+  }, [editing, value])
+
+  const rendered = paragraphs ? renderParagraphs(value) : renderInline(value)
+
+  if (!onChange) {
+    return (
+      <div className={className} style={style}>
+        {rendered}
+      </div>
+    )
+  }
+
+  if (!editing) {
+    return (
+      <div
+        className={`${className} sl-editable`}
+        style={style}
+        title="Clique pra editar"
+        onClick={() => setEditing(true)}
+      >
+        {value.trim() === '' ? (
+          <span className="sl-edit-placeholder">{placeholder}</span>
+        ) : (
+          rendered
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className={className} style={style}>
+      <textarea
+        ref={ref}
+        className="sl-edit"
+        autoFocus
+        rows={1}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            setEditing(false)
+            return
+          }
+          if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+            const markers: Record<string, string> = {
+              b: '**',
+              i: '*',
+              u: '_',
+              e: '==',
+            }
+            const marker = markers[e.key.toLowerCase()]
+            if (marker) {
+              e.preventDefault()
+              const el = e.currentTarget
+              const r = applyMarker(value, el.selectionStart, el.selectionEnd, marker)
+              pendingSel.current = { start: r.start, end: r.end }
+              onChange(r.value)
+            }
+          }
+        }}
+      />
+    </div>
+  )
 }
 
 /**
@@ -178,12 +283,14 @@ function SplitHalfLayers({
   textStyle,
   mode,
   still,
+  onEdit,
 }: {
   half: SplitHalf
   region: 'top' | 'bottom'
   textStyle: CSSProperties
   mode: RenderMode
   still: boolean
+  onEdit?: (v: string) => void
 }) {
   return (
     <div className={`sl-split-half sl-split-half--${region}`}>
@@ -198,9 +305,13 @@ function SplitHalfLayers({
         </div>
       )}
       {half.text.trim() !== '' && <div className="sl-split-grad" />}
-      <div className="sl-split-text" style={textStyle}>
-        {renderInline(half.text)}
-      </div>
+      <EditableText
+        value={half.text}
+        onChange={onEdit}
+        className="sl-split-text"
+        style={textStyle}
+        placeholder={region === 'top' ? 'Clique e escreva o texto de cima…' : 'Clique e escreva o texto de baixo…'}
+      />
     </div>
   )
 }
@@ -209,10 +320,12 @@ function SplitLayers({
   slide,
   mode,
   still,
+  onTextEdit,
 }: {
   slide: SplitSlide
   mode: RenderMode
   still: boolean
+  onTextEdit?: (field: EditField, value: string) => void
 }) {
   const textStyle = slideTextStyle(slide)
   return (
@@ -223,6 +336,7 @@ function SplitLayers({
         textStyle={textStyle}
         mode={mode}
         still={still}
+        onEdit={onTextEdit && ((v) => onTextEdit('top', v))}
       />
       <SplitHalfLayers
         half={slide.bottom}
@@ -230,6 +344,7 @@ function SplitLayers({
         textStyle={textStyle}
         mode={mode}
         still={still}
+        onEdit={onTextEdit && ((v) => onTextEdit('bottom', v))}
       />
     </>
   )
@@ -240,11 +355,13 @@ function ComparisonLayers({
   media,
   mode,
   still,
+  onEdit,
 }: {
   slide: ComparisonSlide
   media: SlideMedia | null
   mode: RenderMode
   still: boolean
+  onEdit?: (v: string) => void
 }) {
   const posClass =
     slide.textPosition === 'top' ? 'sl-comp-text--top' : 'sl-comp-text--bottom'
@@ -259,9 +376,13 @@ function ComparisonLayers({
         <Placeholder label={'Sem foto ainda.\nUse “Enviar arquivo” ou “Colar imagem”.'} />
       )}
       {slide.text.trim() !== '' && <div className={gradClass} />}
-      <div className={`sl-comp-text ${posClass}`} style={slideTextStyle(slide)}>
-        {renderInline(slide.text)}
-      </div>
+      <EditableText
+        value={slide.text}
+        onChange={onEdit}
+        className={`sl-comp-text ${posClass}`}
+        style={slideTextStyle(slide)}
+        placeholder="Clique e escreva a frase…"
+      />
     </>
   )
 }
@@ -271,11 +392,13 @@ function DevelopmentLayers({
   media,
   mode,
   still,
+  onEdit,
 }: {
   slide: DevelopmentSlide
   media: SlideMedia | null
   mode: RenderMode
   still: boolean
+  onEdit?: (v: string) => void
 }) {
   return (
     <>
@@ -285,12 +408,14 @@ function DevelopmentLayers({
       {/* sombra forte por cima da foto pra garantir a leitura do texto;
           entra na arte transparente também, pra escurecer o vídeo composto */}
       {media && <div className="sl-dev-scrim" />}
-      <div className="sl-dev" style={slideTextStyle(slide)}>
-        {renderParagraphs(slide.body)}
-        {slide.emphasis.trim() !== '' && (
-          <p className="sl-emphasis">{renderInline(slide.emphasis)}</p>
-        )}
-      </div>
+      <EditableText
+        value={slide.body}
+        onChange={onEdit}
+        className="sl-dev"
+        style={slideTextStyle(slide)}
+        paragraphs
+        placeholder="Clique e escreva o desenvolvimento…"
+      />
     </>
   )
 }
@@ -299,10 +424,12 @@ function BookLayers({
   slide,
   media,
   mode,
+  onEdit,
 }: {
   slide: BookSlide
   media: SlideMedia | null
   mode: RenderMode
+  onEdit?: (v: string) => void
 }) {
   return (
     <div className="sl-book" style={slideTextStyle(slide)}>
@@ -325,7 +452,13 @@ function BookLayers({
         // placeholder mantém o texto na mesma posição que o preview mostrou.
         <div className="sl-book-img sl-book-img--empty sl-book-img--ghost" />
       )}
-      <div className="sl-book-body">{renderParagraphs(slide.body)}</div>
+      <EditableText
+        value={slide.body}
+        onChange={onEdit}
+        className="sl-book-body"
+        paragraphs
+        placeholder="Clique e escreva o texto…"
+      />
     </div>
   )
 }
@@ -335,11 +468,13 @@ function FinalLayers({
   media,
   mode,
   still,
+  onEdit,
 }: {
   slide: FinalSlide
   media: SlideMedia | null
   mode: RenderMode
   still: boolean
+  onEdit?: (v: string) => void
 }) {
   return (
     <>
@@ -353,9 +488,14 @@ function FinalLayers({
           <span>{'Foto do slide final'}</span>
         </div>
       )}
-      <div className="sl-final-text" style={slideTextStyle(slide)}>
-        {renderParagraphs(slide.text)}
-      </div>
+      <EditableText
+        value={slide.text}
+        onChange={onEdit}
+        className="sl-final-text"
+        style={slideTextStyle(slide)}
+        paragraphs
+        placeholder="Clique e escreva o convite…"
+      />
     </>
   )
 }
@@ -366,6 +506,7 @@ export function SlideRenderer({
   width,
   mode = 'full',
   thumbnail = false,
+  onTextEdit,
 }: RendererProps) {
   const scale = width / SLIDE_W
   const outerStyle: CSSProperties = {
@@ -377,23 +518,52 @@ export function SlideRenderer({
   let layers: JSX.Element
   switch (slide.type) {
     case 'split':
-      layers = <SplitLayers slide={slide} mode={mode} still={thumbnail} />
+      layers = (
+        <SplitLayers slide={slide} mode={mode} still={thumbnail} onTextEdit={onTextEdit} />
+      )
       break
     case 'comparison':
       layers = (
-        <ComparisonLayers slide={slide} media={media} mode={mode} still={thumbnail} />
+        <ComparisonLayers
+          slide={slide}
+          media={media}
+          mode={mode}
+          still={thumbnail}
+          onEdit={onTextEdit && ((v) => onTextEdit('text', v))}
+        />
       )
       break
     case 'development':
       layers = (
-        <DevelopmentLayers slide={slide} media={media} mode={mode} still={thumbnail} />
+        <DevelopmentLayers
+          slide={slide}
+          media={media}
+          mode={mode}
+          still={thumbnail}
+          onEdit={onTextEdit && ((v) => onTextEdit('body', v))}
+        />
       )
       break
     case 'book':
-      layers = <BookLayers slide={slide} media={media} mode={mode} />
+      layers = (
+        <BookLayers
+          slide={slide}
+          media={media}
+          mode={mode}
+          onEdit={onTextEdit && ((v) => onTextEdit('body', v))}
+        />
+      )
       break
     case 'final':
-      layers = <FinalLayers slide={slide} media={media} mode={mode} still={thumbnail} />
+      layers = (
+        <FinalLayers
+          slide={slide}
+          media={media}
+          mode={mode}
+          still={thumbnail}
+          onEdit={onTextEdit && ((v) => onTextEdit('text', v))}
+        />
+      )
       break
   }
 

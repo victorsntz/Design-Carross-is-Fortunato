@@ -1135,3 +1135,46 @@ body {
 .sl-final-text p:last-child {
   margin-bottom: 0;
 }
+
+/* ===== Edição direta no slide + frase maior ===== */
+
+/* ==frase maior== dentro do texto */
+.sl-big {
+  font-size: 1.35em;
+}
+
+/* Bloco de texto clicável no preview */
+.sl-editable {
+  cursor: text;
+}
+
+.sl-editable:hover {
+  outline: 1px dashed rgba(255, 255, 255, 0.25);
+  outline-offset: 4px;
+}
+
+/* Caixa de edição que aparece no lugar do texto — herda tudo do slide
+   pra ficar idêntica ao resultado final. Outline nunca sai no export
+   porque a edição fecha antes (blur). */
+.sl-edit {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  resize: none;
+  overflow: hidden;
+  outline: 1px dashed rgba(255, 255, 255, 0.4);
+  outline-offset: 4px;
+  text-align: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  display: block;
+}
+
+.sl-edit-placeholder {
+  opacity: 0.4;
+}

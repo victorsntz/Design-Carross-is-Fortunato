@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
-  BookSlide,
   ComparisonSlide,
-  DevelopmentSlide,
-  FinalSlide,
   Project,
   Slide,
   SlideMedia,
@@ -1398,6 +1395,29 @@ export default function App() {
                     slide={selected}
                     project={project}
                     width={previewWidth}
+                    onTextEdit={(field, v) =>
+                      updateSlide(selected.id, (s) => {
+                        if (
+                          s.type === 'split' &&
+                          (field === 'top' || field === 'bottom')
+                        ) {
+                          return {
+                            ...s,
+                            [field]: { ...s[field], text: v },
+                          } as Slide
+                        }
+                        if (
+                          field === 'body' &&
+                          (s.type === 'development' || s.type === 'book')
+                        ) {
+                          return { ...s, body: v }
+                        }
+                        if (field === 'text' && 'text' in s) {
+                          return { ...s, text: v } as Slide
+                        }
+                        return s
+                      })
+                    }
                   />
                 </div>
               </div>
@@ -1531,163 +1551,52 @@ export default function App() {
                       </section>
                     )
                   })}
-                  <section className="card">
-                    <h2 className="card-title">Textos</h2>
-                    {(['top', 'bottom'] as const).map((slot) => (
-                      <label key={slot} className="field">
-                        <span style={{ color: HALF_COLOR[slot] }}>
-                          {slot === 'top' ? 'Texto de cima' : 'Texto de baixo'}
-                        </span>
-                        <AutoTextarea
-                          value={(selected as SplitSlide)[slot].text}
-                          onValueChange={(v) =>
-                            updateSlide(selected.id, (s) =>
-                              s.type === 'split'
-                                ? ({ ...s, [slot]: { ...s[slot], text: v } } as Slide)
-                                : s,
-                            )
-                          }
-                        />
-                      </label>
-                    ))}
-                    <div className="control-row">
-                      <span className="control-label">Tamanho do texto</span>
-                      <div className="stepper">
-                        <button
-                          type="button"
-                          className="btn btn--small"
-                          disabled={selected.sizeStep <= 0}
-                          onClick={() => stepSize(selected.id, -1)}
-                        >
-                          A−
-                        </button>
-                        <span className="stepper-dots">
-                          {Array.from({ length: sizeStepsFor(selected.type) }, (_, i) => (
-                            <span
-                              key={i}
-                              className={i <= selected.sizeStep ? 'dot dot--on' : 'dot'}
-                            />
-                          ))}
-                        </span>
-                        <button
-                          type="button"
-                          className="btn btn--small"
-                          disabled={selected.sizeStep >= sizeStepsFor(selected.type) - 1}
-                          onClick={() => stepSize(selected.id, 1)}
-                        >
-                          A+
-                        </button>
-                      </div>
-                    </div>
-                    <TypoSliders
-                      slide={selected}
-                      onChange={(patch) =>
-                        updateSlide(selected.id, (s) => ({ ...s, ...patch }))
-                      }
-                    />
-                    <p className="hint">
-                      Selecione uma palavra e use Ctrl+B (negrito), Ctrl+I (itálico)
-                      ou Ctrl+U (sublinhado).
-                    </p>
-                  </section>
                 </>
               )}
 
-              {(selected.type === 'comparison' ||
-                selected.type === 'development' ||
-                selected.type === 'book' ||
-                selected.type === 'final') && (
-                <section className="card">
-                  <h2 className="card-title">Texto</h2>
-                  {selected.type === 'comparison' && (
-                    <label className="field">
-                      <span>Frase do slide</span>
-                      <AutoTextarea
-                        value={(selected as ComparisonSlide).text}
-                        onValueChange={(v) =>
-                          updateSlide(selected.id, (s) => ({ ...s, text: v }))
-                        }
-                      />
-                    </label>
-                  )}
-                  {selected.type === 'development' && (
-                    <label className="field">
-                      <span>Parágrafos (linha em branco separa)</span>
-                      <AutoTextarea
-                        minRows={6}
-                        value={(selected as DevelopmentSlide).body}
-                        onValueChange={(v) =>
-                          updateSlide(selected.id, (s) => ({ ...s, body: v }))
-                        }
-                      />
-                    </label>
-                  )}
-                  {selected.type === 'book' && (
-                    <label className="field">
-                      <span>Parágrafos (linha em branco separa)</span>
-                      <AutoTextarea
-                        minRows={5}
-                        value={(selected as BookSlide).body}
-                        onValueChange={(v) =>
-                          updateSlide(selected.id, (s) => ({ ...s, body: v }))
-                        }
-                      />
-                    </label>
-                  )}
-                  {selected.type === 'final' && (
-                    <label className="field">
-                      <span>Convite (“Me segue se…”)</span>
-                      <AutoTextarea
-                        minRows={3}
-                        value={(selected as FinalSlide).text}
-                        onValueChange={(v) =>
-                          updateSlide(selected.id, (s) => ({ ...s, text: v }))
-                        }
-                      />
-                    </label>
-                  )}
-                  <div className="control-row">
-                    <span className="control-label">Tamanho do texto</span>
-                    <div className="stepper">
-                      <button
-                        type="button"
-                        className="btn btn--small"
-                        disabled={selected.sizeStep <= 0}
-                        onClick={() => stepSize(selected.id, -1)}
-                      >
-                        A−
-                      </button>
-                      <span className="stepper-dots">
-                        {Array.from({ length: sizeStepsFor(selected.type) }, (_, i) => (
-                          <span
-                            key={i}
-                            className={i <= selected.sizeStep ? 'dot dot--on' : 'dot'}
-                          />
-                        ))}
-                      </span>
-                      <button
-                        type="button"
-                        className="btn btn--small"
-                        disabled={selected.sizeStep >= sizeStepsFor(selected.type) - 1}
-                        onClick={() => stepSize(selected.id, 1)}
-                      >
-                        A+
-                      </button>
-                    </div>
+              <section className="card">
+                <h2 className="card-title">Texto</h2>
+                <p className="hint">
+                  Clique no texto do slide pra escrever. Selecione um trecho e use
+                  Ctrl+B negrito · Ctrl+I itálico · Ctrl+U sublinhado · Ctrl+E
+                  frase maior.
+                </p>
+                <div className="control-row">
+                  <span className="control-label">Tamanho do texto</span>
+                  <div className="stepper">
+                    <button
+                      type="button"
+                      className="btn btn--small"
+                      disabled={selected.sizeStep <= 0}
+                      onClick={() => stepSize(selected.id, -1)}
+                    >
+                      A−
+                    </button>
+                    <span className="stepper-dots">
+                      {Array.from({ length: sizeStepsFor(selected.type) }, (_, i) => (
+                        <span
+                          key={i}
+                          className={i <= selected.sizeStep ? 'dot dot--on' : 'dot'}
+                        />
+                      ))}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn--small"
+                      disabled={selected.sizeStep >= sizeStepsFor(selected.type) - 1}
+                      onClick={() => stepSize(selected.id, 1)}
+                    >
+                      A+
+                    </button>
                   </div>
-                  <TypoSliders
-                    slide={selected}
-                    onChange={(patch) =>
-                      updateSlide(selected.id, (s) => ({ ...s, ...patch }))
-                    }
-                  />
-                  <p className="hint">
-                    Selecione uma palavra e use Ctrl+B (negrito), Ctrl+I (itálico) ou
-                    Ctrl+U (sublinhado) — ou escreva **negrito**, *itálico*,
-                    _sublinhado_.
-                  </p>
-                </section>
-              )}
+                </div>
+                <TypoSliders
+                  slide={selected}
+                  onChange={(patch) =>
+                    updateSlide(selected.id, (s) => ({ ...s, ...patch }))
+                  }
+                />
+              </section>
 
               <section className="card">
                 <h2 className="card-title">Slide</h2>
