@@ -1557,9 +1557,10 @@ export default function App() {
               <section className="card">
                 <h2 className="card-title">Texto</h2>
                 <p className="hint">
-                  Clique no texto do slide pra escrever. Selecione um trecho e use
-                  Ctrl+B negrito · Ctrl+I itálico · Ctrl+U sublinhado · Ctrl+E
-                  frase maior.
+                  Clique no texto do slide pra escrever. Selecione um trecho e
+                  use os botões que aparecem em cima do texto (Negrito, Itálico,
+                  Sublinhado e Frase maior) — ou os atalhos Ctrl+B · Ctrl+I ·
+                  Ctrl+U · Ctrl+E.
                 </p>
                 <div className="control-row">
                   <span className="control-label">Tamanho do texto</span>

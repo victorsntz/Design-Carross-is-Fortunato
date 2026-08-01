@@ -1178,3 +1178,56 @@ body {
 .sl-edit-placeholder {
   opacity: 0.4;
 }
+
+/* Barrinha de botões que flutua logo acima do texto durante a edição.
+   Tamanhos em "pixels do slide" (1080x1350) porque o preview é reduzido
+   por transform — na tela ficam com ~metade disso. */
+.sl-edit-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.sl-toolbar {
+  position: absolute;
+  bottom: calc(100% + 24px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(16, 16, 20, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 18px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  z-index: 6;
+}
+
+.sl-tb {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 32px;
+  line-height: 1;
+  min-width: 64px;
+  padding: 18px 20px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.sl-tb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.sl-tb--b {
+  font-weight: 700;
+}
+
+.sl-tb--i {
+  font-style: italic;
+}
+
+.sl-tb--u {
+  text-decoration: underline;
+}

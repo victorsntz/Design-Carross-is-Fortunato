@@ -165,40 +165,86 @@ function EditableText({
     )
   }
 
+  const apply = (marker: string) => {
+    const el = ref.current
+    if (!el) return
+    const r = applyMarker(value, el.selectionStart, el.selectionEnd, marker)
+    pendingSel.current = { start: r.start, end: r.end }
+    onChange(r.value)
+  }
+
   return (
     <div className={className} style={style}>
-      <textarea
-        ref={ref}
-        className="sl-edit"
-        autoFocus
-        rows={1}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={() => setEditing(false)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.preventDefault()
-            setEditing(false)
-            return
-          }
-          if ((e.ctrlKey || e.metaKey) && !e.altKey) {
-            const markers: Record<string, string> = {
-              b: '**',
-              i: '*',
-              u: '_',
-              e: '==',
-            }
-            const marker = markers[e.key.toLowerCase()]
-            if (marker) {
+      <div className="sl-edit-wrap">
+        {/* mousedown prevenido: clicar nos botões não pode tirar o foco da
+            caixa, senão a edição fecharia antes do clique valer */}
+        <div className="sl-toolbar" onMouseDown={(e) => e.preventDefault()}>
+          <button
+            type="button"
+            className="sl-tb sl-tb--b"
+            title="Negrito (Ctrl+B)"
+            onClick={() => apply('**')}
+          >
+            N
+          </button>
+          <button
+            type="button"
+            className="sl-tb sl-tb--i"
+            title="Itálico (Ctrl+I)"
+            onClick={() => apply('*')}
+          >
+            I
+          </button>
+          <button
+            type="button"
+            className="sl-tb sl-tb--u"
+            title="Sublinhado (Ctrl+U)"
+            onClick={() => apply('_')}
+          >
+            S
+          </button>
+          <button
+            type="button"
+            className="sl-tb"
+            title="Frase maior (Ctrl+E)"
+            onClick={() => apply('==')}
+          >
+            Frase maior
+          </button>
+        </div>
+        <textarea
+          ref={ref}
+          className="sl-edit"
+          autoFocus
+          rows={1}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => setEditing(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
               e.preventDefault()
-              const el = e.currentTarget
-              const r = applyMarker(value, el.selectionStart, el.selectionEnd, marker)
-              pendingSel.current = { start: r.start, end: r.end }
-              onChange(r.value)
+              setEditing(false)
+              return
             }
-          }
-        }}
-      />
+            if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+              const markers: Record<string, string> = {
+                b: '**',
+                i: '*',
+                u: '_',
+                e: '==',
+              }
+              const marker = markers[e.key.toLowerCase()]
+              if (marker) {
+                e.preventDefault()
+                const el = e.currentTarget
+                const r = applyMarker(value, el.selectionStart, el.selectionEnd, marker)
+                pendingSel.current = { start: r.start, end: r.end }
+                onChange(r.value)
+              }
+            }
+          }}
+        />
+      </div>
     </div>
   )
 }
