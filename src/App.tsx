@@ -1118,6 +1118,29 @@ export default function App() {
     refreshList()
   }
 
+  /** Duplica um carrossel (o aberto ou um da lista) e já abre a cópia. */
+  async function duplicateCarousel(id: string) {
+    const source = id === projectId ? projectRef.current : await loadProject(id)
+    if (!source) {
+      window.alert('Não consegui abrir este carrossel pra duplicar.')
+      return
+    }
+    const copy = normalizeProject(JSON.parse(JSON.stringify(source)))
+    if (!copy) {
+      window.alert('Não consegui duplicar este carrossel.')
+      return
+    }
+    copy.title = `${copy.title} (cópia)`
+    if (!(await saveBeforeLeaving())) return
+    const cid = newId()
+    setProjectId(cid)
+    replaceProject(copy)
+    setSelectedId(copy.slides[0]?.id ?? '')
+    // Grava já pra cópia aparecer na lista na hora, não só no autosave
+    await saveProjectToStorage(cid, copy)
+    refreshList()
+  }
+
   async function deleteCarousel(id: string) {
     const entry = saved.find((s) => s.id === id)
     if (!window.confirm(`Excluir "${entry?.title ?? 'este carrossel'}"? Não dá pra desfazer.`)) {
@@ -1363,6 +1386,15 @@ export default function App() {
                       <span className="project-item-meta">
                         {s.slideCount} slides · {formatWhen(s.updatedAt)}
                       </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-icon"
+                      title="Duplicar este carrossel"
+                      aria-label={`Duplicar ${s.title}`}
+                      onClick={() => void duplicateCarousel(s.id)}
+                    >
+                      ⧉
                     </button>
                     <button
                       type="button"
