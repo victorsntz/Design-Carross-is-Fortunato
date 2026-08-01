@@ -206,7 +206,7 @@ function EditableText({
           <button
             type="button"
             className="sl-tb"
-            title="Frase maior (Ctrl+E)"
+            title="Frase maior (Cmd+M ou Ctrl+E)"
             onClick={() => apply('==')}
           >
             Frase maior
@@ -232,6 +232,7 @@ function EditableText({
                 i: '*',
                 u: '_',
                 e: '==',
+                m: '==', // Cmd+M no Mac (Cmd+E abre extensões em alguns navegadores)
               }
               const marker = markers[e.key.toLowerCase()]
               if (marker) {

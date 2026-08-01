@@ -1560,7 +1560,7 @@ export default function App() {
                   Clique no texto do slide pra escrever. Selecione um trecho e
                   use os botões que aparecem em cima do texto (Negrito, Itálico,
                   Sublinhado e Frase maior) — ou os atalhos Ctrl+B · Ctrl+I ·
-                  Ctrl+U · Ctrl+E.
+                  Ctrl+U · Cmd+M (frase maior).
                 </p>
                 <div className="control-row">
                   <span className="control-label">Tamanho do texto</span>
