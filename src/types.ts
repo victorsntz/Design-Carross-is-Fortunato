@@ -19,6 +19,10 @@ interface BaseSlide {
   type: SlideType
   /** Passo do tamanho do texto: 0 (menor) a 4 (maior). */
   sizeStep: number
+  /** Altura da linha (1.15–1.6). Sem valor = padrão do tipo. */
+  lineHeight?: number
+  /** Espaço entre letras em em (-0.03–0.06). Sem valor = 0. */
+  letterSpacing?: number
 }
 
 /** Metade de uma tela partida: foto/vídeo + frase curta. */

@@ -48,6 +48,39 @@ export function fontSizeFor(slide: Slide): number {
   return sizes[step]
 }
 
+// Tipografia ajustável com guarda-corpo: nem esmagada, nem espalhada.
+export const LINE_HEIGHT_MIN = 1.15
+export const LINE_HEIGHT_MAX = 1.6
+export const LETTER_SPACING_MIN = -0.03
+export const LETTER_SPACING_MAX = 0.06
+
+const DEFAULT_LINE_HEIGHT: Record<Slide['type'], number> = {
+  split: 1.3,
+  comparison: 1.3,
+  development: 1.5,
+  book: 1.5,
+  final: 1.32,
+}
+
+export function lineHeightFor(slide: Slide): number {
+  const v = slide.lineHeight ?? DEFAULT_LINE_HEIGHT[slide.type]
+  return Math.min(LINE_HEIGHT_MAX, Math.max(LINE_HEIGHT_MIN, v))
+}
+
+export function letterSpacingFor(slide: Slide): number {
+  const v = slide.letterSpacing ?? 0
+  return Math.min(LETTER_SPACING_MAX, Math.max(LETTER_SPACING_MIN, v))
+}
+
+/** Estilo tipográfico completo do texto do slide. */
+export function slideTextStyle(slide: Slide): CSSProperties {
+  return {
+    fontSize: fontSizeFor(slide),
+    lineHeight: lineHeightFor(slide),
+    letterSpacing: `${letterSpacingFor(slide)}em`,
+  }
+}
+
 /**
  * full: editor (mostra placeholders de espaço vazio)
  * export: saída final (sem placeholders)
@@ -142,13 +175,13 @@ function Placeholder({ label }: { label: string }) {
 function SplitHalfLayers({
   half,
   region,
-  fontSize,
+  textStyle,
   mode,
   still,
 }: {
   half: SplitHalf
   region: 'top' | 'bottom'
-  fontSize: number
+  textStyle: CSSProperties
   mode: RenderMode
   still: boolean
 }) {
@@ -165,7 +198,7 @@ function SplitHalfLayers({
         </div>
       )}
       {half.text.trim() !== '' && <div className="sl-split-grad" />}
-      <div className="sl-split-text" style={{ fontSize }}>
+      <div className="sl-split-text" style={textStyle}>
         {renderInline(half.text)}
       </div>
     </div>
@@ -181,20 +214,20 @@ function SplitLayers({
   mode: RenderMode
   still: boolean
 }) {
-  const fontSize = fontSizeFor(slide)
+  const textStyle = slideTextStyle(slide)
   return (
     <>
       <SplitHalfLayers
         half={slide.top}
         region="top"
-        fontSize={fontSize}
+        textStyle={textStyle}
         mode={mode}
         still={still}
       />
       <SplitHalfLayers
         half={slide.bottom}
         region="bottom"
-        fontSize={fontSize}
+        textStyle={textStyle}
         mode={mode}
         still={still}
       />
@@ -213,7 +246,6 @@ function ComparisonLayers({
   mode: RenderMode
   still: boolean
 }) {
-  const fontSize = fontSizeFor(slide)
   const posClass =
     slide.textPosition === 'top' ? 'sl-comp-text--top' : 'sl-comp-text--bottom'
   const gradClass =
@@ -227,7 +259,7 @@ function ComparisonLayers({
         <Placeholder label={'Sem foto ainda.\nUse “Enviar arquivo” ou “Colar imagem”.'} />
       )}
       {slide.text.trim() !== '' && <div className={gradClass} />}
-      <div className={`sl-comp-text ${posClass}`} style={{ fontSize }}>
+      <div className={`sl-comp-text ${posClass}`} style={slideTextStyle(slide)}>
         {renderInline(slide.text)}
       </div>
     </>
@@ -245,7 +277,6 @@ function DevelopmentLayers({
   mode: RenderMode
   still: boolean
 }) {
-  const fontSize = fontSizeFor(slide)
   return (
     <>
       {media && mode !== 'overlay' && (
@@ -254,7 +285,7 @@ function DevelopmentLayers({
       {/* sombra forte por cima da foto pra garantir a leitura do texto;
           entra na arte transparente também, pra escurecer o vídeo composto */}
       {media && <div className="sl-dev-scrim" />}
-      <div className="sl-dev" style={{ fontSize }}>
+      <div className="sl-dev" style={slideTextStyle(slide)}>
         {renderParagraphs(slide.body)}
         {slide.emphasis.trim() !== '' && (
           <p className="sl-emphasis">{renderInline(slide.emphasis)}</p>
@@ -273,9 +304,8 @@ function BookLayers({
   media: SlideMedia | null
   mode: RenderMode
 }) {
-  const fontSize = fontSizeFor(slide)
   return (
-    <div className="sl-book" style={{ fontSize }}>
+    <div className="sl-book" style={slideTextStyle(slide)}>
       {media ? (
         // Na arte transparente a imagem fica invisível mas segura o lugar,
         // senão o texto sobe e desalinha em relação ao slide completo.
@@ -311,7 +341,6 @@ function FinalLayers({
   mode: RenderMode
   still: boolean
 }) {
-  const fontSize = fontSizeFor(slide)
   return (
     <>
       {media && mode !== 'overlay' && (
@@ -324,7 +353,7 @@ function FinalLayers({
           <span>{'Foto do slide final'}</span>
         </div>
       )}
-      <div className="sl-final-text" style={{ fontSize }}>
+      <div className="sl-final-text" style={slideTextStyle(slide)}>
         {renderParagraphs(slide.text)}
       </div>
     </>

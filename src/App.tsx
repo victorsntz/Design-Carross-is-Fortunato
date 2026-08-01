@@ -10,7 +10,16 @@ import type {
   SlideType,
   SplitSlide,
 } from './types'
-import { SlideRenderer, sizeStepsFor } from './components/SlideRenderer'
+import {
+  LETTER_SPACING_MAX,
+  LETTER_SPACING_MIN,
+  LINE_HEIGHT_MAX,
+  LINE_HEIGHT_MIN,
+  letterSpacingFor,
+  lineHeightFor,
+  SlideRenderer,
+  sizeStepsFor,
+} from './components/SlideRenderer'
 import {
   defaultProject,
   deleteProjectFromStorage,
@@ -98,6 +107,55 @@ function TypeIcon({ type }: { type: SlideType }) {
 
 /** Onde uma mídia entra num slide: no espaço único ou numa das metades. */
 type MediaSlot = 'media' | 'top' | 'bottom'
+
+/**
+ * Ajuste fino da tipografia por barrinhas, com guarda-corpo nos extremos:
+ * nem texto esmagado, nem texto espalhado.
+ */
+function TypoSliders({
+  slide,
+  onChange,
+}: {
+  slide: Slide
+  onChange: (patch: { lineHeight?: number; letterSpacing?: number }) => void
+}) {
+  return (
+    <>
+      <div className="control-row">
+        <span className="control-label">Altura da linha</span>
+      </div>
+      <div className="slider-row">
+        <span>Justa</span>
+        <input
+          type="range"
+          min={LINE_HEIGHT_MIN}
+          max={LINE_HEIGHT_MAX}
+          step={0.01}
+          value={lineHeightFor(slide)}
+          aria-label="Altura da linha"
+          onChange={(e) => onChange({ lineHeight: Number(e.target.value) })}
+        />
+        <span>Solta</span>
+      </div>
+      <div className="control-row">
+        <span className="control-label">Espaço entre letras</span>
+      </div>
+      <div className="slider-row">
+        <span>Junto</span>
+        <input
+          type="range"
+          min={LETTER_SPACING_MIN}
+          max={LETTER_SPACING_MAX}
+          step={0.005}
+          value={letterSpacingFor(slide)}
+          aria-label="Espaço entre letras"
+          onChange={(e) => onChange({ letterSpacing: Number(e.target.value) })}
+        />
+        <span>Aberto</span>
+      </div>
+    </>
+  )
+}
 
 function slugify(text: string): string {
   return (
@@ -1521,6 +1579,12 @@ export default function App() {
                         </button>
                       </div>
                     </div>
+                    <TypoSliders
+                      slide={selected}
+                      onChange={(patch) =>
+                        updateSlide(selected.id, (s) => ({ ...s, ...patch }))
+                      }
+                    />
                     <p className="hint">
                       Selecione uma palavra e use Ctrl+B (negrito), Ctrl+I (itálico)
                       ou Ctrl+U (sublinhado).
@@ -1611,6 +1675,12 @@ export default function App() {
                       </button>
                     </div>
                   </div>
+                  <TypoSliders
+                    slide={selected}
+                    onChange={(patch) =>
+                      updateSlide(selected.id, (s) => ({ ...s, ...patch }))
+                    }
+                  />
                   <p className="hint">
                     Selecione uma palavra e use Ctrl+B (negrito), Ctrl+I (itálico) ou
                     Ctrl+U (sublinhado) — ou escreva **negrito**, *itálico*,

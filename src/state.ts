@@ -467,6 +467,14 @@ export function normalizeProject(data: unknown): Project | null {
       Math.max(0, Math.round(merged.sizeStep)),
       sizeStepsFor(merged.type) - 1,
     )
+    merged.lineHeight =
+      typeof merged.lineHeight === 'number' && Number.isFinite(merged.lineHeight)
+        ? Math.min(1.6, Math.max(1.15, merged.lineHeight))
+        : undefined
+    merged.letterSpacing =
+      typeof merged.letterSpacing === 'number' && Number.isFinite(merged.letterSpacing)
+        ? Math.min(0.06, Math.max(-0.03, merged.letterSpacing))
+        : undefined
     // Campos de texto precisam ser string de verdade: um .json editado na mão
     // (ou corrompido) não pode derrubar o app na hora de renderizar.
     switch (merged.type) {
