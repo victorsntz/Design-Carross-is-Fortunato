@@ -10,7 +10,12 @@ import type {
   SplitHalf,
   SplitSlide,
 } from '../types'
-import { applyMarker, renderInline, renderParagraphs } from '../markdown'
+import {
+  applyMarker,
+  buildEditingFragment,
+  renderInline,
+  renderParagraphs,
+} from '../markdown'
 
 /** Campo de texto de um slide, pra edição direto na arte. */
 export type EditField = 'text' | 'body' | 'top' | 'bottom'
@@ -103,9 +108,115 @@ interface RendererProps {
   onTextEdit?: (field: EditField, value: string) => void
 }
 
+// ===== Editor de texto direto na arte (contentEditable) =====
+// O conteúdo mostrado durante a edição é reconstruído a cada tecla a partir
+// do texto cru, então negrito/itálico/sublinhado/frase maior aparecem na
+// hora. O cursor é guardado como "quantos caracteres desde o início" antes
+// de reconstruir e recolocado depois — os marcadores contam como texto,
+// então as posições sempre batem.
+
+/** Texto cru do editor: nós de texto + <br> viram \n; um \n sentinela no
+ *  fim (posto pelo renderEditor pra linha vazia final aparecer) é removido. */
+function editorTextOf(root: Node): string {
+  let out = ''
+  root.childNodes.forEach((n) => {
+    if (n.nodeType === Node.TEXT_NODE) out += (n as Text).data
+    else if (n.nodeName === 'BR') out += '\n'
+    else out += editorTextOf(n)
+  })
+  return out
+}
+
+function editorText(root: HTMLElement): string {
+  const raw = editorTextOf(root)
+  return raw.endsWith('\n') ? raw.slice(0, -1) : raw
+}
+
+/** Posição da seleção em nº de caracteres desde o início do editor. */
+function editorSelection(el: HTMLElement): { start: number; end: number } {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return { start: 0, end: 0 }
+  const range = sel.getRangeAt(0)
+  const offsetOf = (container: Node, offset: number): number => {
+    let chars = 0
+    let found = false
+    const walk = (node: Node) => {
+      if (found) return
+      if (node === container && node.nodeType === Node.TEXT_NODE) {
+        chars += offset
+        found = true
+        return
+      }
+      if (node.nodeType === Node.TEXT_NODE) {
+        chars += (node as Text).data.length
+        return
+      }
+      if (node.nodeName === 'BR') {
+        chars += 1
+        if (node === container) found = true
+        return
+      }
+      const kids = node.childNodes
+      for (let i = 0; i < kids.length; i++) {
+        if (node === container && i === offset) {
+          found = true
+          return
+        }
+        walk(kids[i])
+        if (found) return
+      }
+      if (node === container) found = true
+    }
+    walk(el)
+    return chars
+  }
+  return {
+    start: offsetOf(range.startContainer, range.startOffset),
+    end: offsetOf(range.endContainer, range.endOffset),
+  }
+}
+
+/** Recoloca o cursor/seleção na posição em caracteres dada. */
+function editorSetSelection(el: HTMLElement, start: number, end: number) {
+  const locate = (target: number): { node: Node; offset: number } => {
+    let chars = 0
+    let res: { node: Node; offset: number } | null = null
+    let last: { node: Node; offset: number } = { node: el, offset: 0 }
+    const walk = (node: Node) => {
+      if (res) return
+      if (node.nodeType === Node.TEXT_NODE) {
+        const len = (node as Text).data.length
+        if (chars + len >= target) {
+          res = { node, offset: target - chars }
+          return
+        }
+        chars += len
+        last = { node, offset: len }
+        return
+      }
+      const kids = node.childNodes
+      for (let i = 0; i < kids.length; i++) {
+        walk(kids[i])
+        if (res) return
+      }
+    }
+    walk(el)
+    return res ?? last
+  }
+  const s = locate(start)
+  const e = locate(end)
+  const range = document.createRange()
+  range.setStart(s.node, s.offset)
+  range.setEnd(e.node, e.offset)
+  const sel = window.getSelection()
+  if (!sel) return
+  sel.removeAllRanges()
+  sel.addRange(range)
+}
+
 /**
  * Texto do slide que vira campo de edição ao clicar: mesma fonte, mesmo
- * lugar, mesmos atalhos (Ctrl+B/I/U/E). Esc ou clicar fora conclui.
+ * lugar, formatação visível na hora. Esc ou clicar fora conclui.
  */
 function EditableText({
   value,
@@ -123,20 +234,54 @@ function EditableText({
   placeholder: string
 }) {
   const [editing, setEditing] = useState(false)
-  const ref = useRef<HTMLTextAreaElement>(null)
-  const pendingSel = useRef<{ start: number; end: number } | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  const composing = useRef(false)
+
+  const renderEditor = (
+    el: HTMLElement,
+    val: string,
+    selStart: number,
+    selEnd: number,
+  ) => {
+    el.replaceChildren(buildEditingFragment(val))
+    // \n sentinela: sem ele, um Enter no fim do texto não mostra a linha nova
+    el.appendChild(document.createTextNode('\n'))
+    const max = val.length
+    editorSetSelection(el, Math.min(selStart, max), Math.min(selEnd, max))
+  }
 
   useEffect(() => {
     if (!editing) return
     const el = ref.current
     if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
-    if (pendingSel.current) {
-      el.setSelectionRange(pendingSel.current.start, pendingSel.current.end)
-      pendingSel.current = null
-    }
-  }, [editing, value])
+    el.focus()
+    renderEditor(el, value, value.length, value.length)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing])
+
+  const handleInput = (el: HTMLElement) => {
+    const text = editorText(el)
+    const sel = editorSelection(el)
+    renderEditor(el, text, sel.start, sel.end)
+    onChange?.(text)
+  }
+
+  const insertText = (el: HTMLElement, inserted: string) => {
+    const sel = editorSelection(el)
+    const v = editorText(el)
+    const nv = v.slice(0, sel.start) + inserted + v.slice(sel.end)
+    renderEditor(el, nv, sel.start + inserted.length, sel.start + inserted.length)
+    onChange?.(nv)
+  }
+
+  const apply = (marker: string) => {
+    const el = ref.current
+    if (!el) return
+    const sel = editorSelection(el)
+    const r = applyMarker(editorText(el), sel.start, sel.end, marker)
+    renderEditor(el, r.value, r.start, r.end)
+    onChange?.(r.value)
+  }
 
   const rendered = paragraphs ? renderParagraphs(value) : renderInline(value)
 
@@ -163,14 +308,6 @@ function EditableText({
         )}
       </div>
     )
-  }
-
-  const apply = (marker: string) => {
-    const el = ref.current
-    if (!el) return
-    const r = applyMarker(value, el.selectionStart, el.selectionEnd, marker)
-    pendingSel.current = { start: r.start, end: r.end }
-    onChange(r.value)
   }
 
   return (
@@ -212,18 +349,36 @@ function EditableText({
             Frase maior
           </button>
         </div>
-        <textarea
+        <div
           ref={ref}
           className="sl-edit"
-          autoFocus
-          rows={1}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          contentEditable
+          role="textbox"
+          aria-multiline="true"
+          onInput={(e) => {
+            if (!composing.current) handleInput(e.currentTarget)
+          }}
+          onCompositionStart={() => {
+            composing.current = true
+          }}
+          onCompositionEnd={(e) => {
+            composing.current = false
+            handleInput(e.currentTarget)
+          }}
           onBlur={() => setEditing(false)}
+          onPaste={(e) => {
+            e.preventDefault()
+            insertText(e.currentTarget, e.clipboardData.getData('text/plain'))
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               e.preventDefault()
-              setEditing(false)
+              e.currentTarget.blur()
+              return
+            }
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              insertText(e.currentTarget, '\n')
               return
             }
             if ((e.ctrlKey || e.metaKey) && !e.altKey) {
@@ -237,10 +392,7 @@ function EditableText({
               const marker = markers[e.key.toLowerCase()]
               if (marker) {
                 e.preventDefault()
-                const el = e.currentTarget
-                const r = applyMarker(value, el.selectionStart, el.selectionEnd, marker)
-                pendingSel.current = { start: r.start, end: r.end }
-                onChange(r.value)
+                apply(marker)
               }
             }
           }}

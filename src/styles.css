@@ -1179,6 +1179,18 @@ body {
   opacity: 0.4;
 }
 
+/* Marcadores de formatação (** _ ==) visíveis durante a edição, apagadinhos */
+.sl-mk {
+  opacity: 0.35;
+}
+
+.sl-edit[contenteditable] {
+  min-height: 1em;
+  caret-color: currentColor;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* Barrinha de botões que flutua logo acima do texto durante a edição.
    Tamanhos em "pixels do slide" (1080x1350) porque o preview é reduzido
    por transform — na tela ficam com ~metade disso. */

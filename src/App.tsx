@@ -456,7 +456,12 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
+      if (
+        target &&
+        (target.tagName === 'TEXTAREA' ||
+          target.tagName === 'INPUT' ||
+          target.isContentEditable)
+      ) {
         return // dentro dos campos vale o desfazer nativo do navegador
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -724,7 +729,12 @@ export default function App() {
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
+      if (
+        target &&
+        (target.tagName === 'TEXTAREA' ||
+          target.tagName === 'INPUT' ||
+          target.isContentEditable)
+      ) {
         return
       }
       const current = project.slides.find((s) => s.id === selectedId) ?? project.slides[0]
