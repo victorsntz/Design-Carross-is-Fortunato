@@ -1179,16 +1179,31 @@ body {
   opacity: 0.4;
 }
 
-/* Marcadores de formatação (** _ ==) visíveis durante a edição, apagadinhos */
-.sl-mk {
-  opacity: 0.35;
-}
-
 .sl-edit[contenteditable] {
   min-height: 1em;
   caret-color: currentColor;
   -webkit-user-select: text;
   user-select: text;
+}
+
+/* Parágrafos dentro do editor: mesmas margens do texto parado, pra nada
+   se mexer quando a edição abre */
+.sl-edit-p {
+  margin: 0 0 0.9em;
+}
+
+.sl-edit-p:last-child {
+  margin-bottom: 0;
+}
+
+.sl-dev .sl-edit-p,
+.sl-book-body .sl-edit-p {
+  margin-bottom: 1.1em;
+}
+
+.sl-dev .sl-edit-p:last-child,
+.sl-book-body .sl-edit-p:last-child {
+  margin-bottom: 0;
 }
 
 /* Barrinha de botões que flutua logo acima do texto durante a edição.

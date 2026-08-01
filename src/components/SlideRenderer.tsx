@@ -13,6 +13,9 @@ import type {
 import {
   applyMarker,
   buildEditingFragment,
+  buildEditorMap,
+  editorValueOf,
+  PARA_RE,
   renderInline,
   renderParagraphs,
 } from '../markdown'
@@ -109,114 +112,89 @@ interface RendererProps {
 }
 
 // ===== Editor de texto direto na arte (contentEditable) =====
-// O conteúdo mostrado durante a edição é reconstruído a cada tecla a partir
-// do texto cru, então negrito/itálico/sublinhado/frase maior aparecem na
-// hora. O cursor é guardado como "quantos caracteres desde o início" antes
-// de reconstruir e recolocado depois — os marcadores contam como texto,
-// então as posições sempre batem.
+// A pessoa vê o texto formatado, sem marcador nenhum — igual ao slide
+// final. A digitação corre solta no DOM (o navegador cuida); a cada tecla
+// o valor cru é relido da estrutura (editorValueOf). Reconstrução do DOM
+// só acontece ao abrir, dar Enter, colar ou usar um botão de formatação —
+// e aí o cursor é recolocado via mapa visível↔cru (buildEditorMap).
 
-/** Texto cru do editor: nós de texto + <br> viram \n; um \n sentinela no
- *  fim (posto pelo renderEditor pra linha vazia final aparecer) é removido. */
-function editorTextOf(root: Node): string {
-  let out = ''
-  root.childNodes.forEach((n) => {
-    if (n.nodeType === Node.TEXT_NODE) out += (n as Text).data
-    else if (n.nodeName === 'BR') out += '\n'
-    else out += editorTextOf(n)
-  })
-  return out
-}
-
-function editorText(root: HTMLElement): string {
-  const raw = editorTextOf(root)
-  return raw.endsWith('\n') ? raw.slice(0, -1) : raw
-}
-
-/** Posição da seleção em nº de caracteres desde o início do editor. */
-function editorSelection(el: HTMLElement): { start: number; end: number } {
-  const sel = window.getSelection()
-  if (!sel || sel.rangeCount === 0) return { start: 0, end: 0 }
-  const range = sel.getRangeAt(0)
-  const offsetOf = (container: Node, offset: number): number => {
-    let chars = 0
-    let found = false
-    const walk = (node: Node) => {
-      if (found) return
-      if (node === container && node.nodeType === Node.TEXT_NODE) {
-        chars += offset
+/** Nº de caracteres visíveis entre o início de `root` e o ponto
+ *  (container, offset) de um Range. <br> conta zero (só existem os
+ *  sentinelas de fim de bloco). */
+function visOffsetIn(root: HTMLElement, container: Node, offset: number): number {
+  let chars = 0
+  let found = false
+  const walk = (node: Node) => {
+    if (found) return
+    if (node === container && node.nodeType === Node.TEXT_NODE) {
+      chars += offset
+      found = true
+      return
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      chars += (node as Text).data.length
+      return
+    }
+    if (node.nodeName === 'BR') {
+      if (node === container) found = true
+      return
+    }
+    const kids = node.childNodes
+    for (let i = 0; i < kids.length; i++) {
+      if (node === container && i === offset) {
         found = true
         return
       }
-      if (node.nodeType === Node.TEXT_NODE) {
-        chars += (node as Text).data.length
-        return
-      }
-      if (node.nodeName === 'BR') {
-        chars += 1
-        if (node === container) found = true
-        return
-      }
-      const kids = node.childNodes
-      for (let i = 0; i < kids.length; i++) {
-        if (node === container && i === offset) {
-          found = true
-          return
-        }
-        walk(kids[i])
-        if (found) return
-      }
-      if (node === container) found = true
+      walk(kids[i])
+      if (found) return
     }
-    walk(el)
-    return chars
+    if (node === container) found = true
   }
-  return {
-    start: offsetOf(range.startContainer, range.startOffset),
-    end: offsetOf(range.endContainer, range.endOffset),
-  }
+  walk(root)
+  return chars
 }
 
-/** Recoloca o cursor/seleção na posição em caracteres dada. */
-function editorSetSelection(el: HTMLElement, start: number, end: number) {
-  const locate = (target: number): { node: Node; offset: number } => {
-    let chars = 0
-    let res: { node: Node; offset: number } | null = null
-    let last: { node: Node; offset: number } = { node: el, offset: 0 }
-    const walk = (node: Node) => {
-      if (res) return
-      if (node.nodeType === Node.TEXT_NODE) {
-        const len = (node as Text).data.length
-        if (chars + len >= target) {
-          res = { node, offset: target - chars }
-          return
-        }
-        chars += len
-        last = { node, offset: len }
+/** Acha o ponto DOM do offset visível dentro de `root` (pro Range). */
+function locateIn(root: HTMLElement, vis: number): { node: Node; offset: number } {
+  let chars = 0
+  let res: { node: Node; offset: number } | null = null
+  let last: { node: Node; offset: number } | null = null
+  const walk = (node: Node) => {
+    if (res) return
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = (node as Text).data.length
+      if (chars + len >= vis) {
+        res = { node, offset: vis - chars }
         return
       }
-      const kids = node.childNodes
-      for (let i = 0; i < kids.length; i++) {
-        walk(kids[i])
-        if (res) return
-      }
+      chars += len
+      last = { node, offset: len }
+      return
     }
-    walk(el)
-    return res ?? last
+    const kids = node.childNodes
+    for (let i = 0; i < kids.length; i++) {
+      walk(kids[i])
+      if (res) return
+    }
   }
-  const s = locate(start)
-  const e = locate(end)
-  const range = document.createRange()
-  range.setStart(s.node, s.offset)
-  range.setEnd(e.node, e.offset)
-  const sel = window.getSelection()
-  if (!sel) return
-  sel.removeAllRanges()
-  sel.addRange(range)
+  walk(root)
+  return res ?? last ?? { node: root, offset: 0 }
+}
+
+/** Converte offset visível → cru dentro de um trecho SEM parágrafos. */
+function visToRawInline(text: string, vis: number, endSide: boolean): number {
+  const map = buildEditorMap(text, false)
+  const v = Math.min(vis, map.visLen)
+  if (endSide || v >= map.visLen) {
+    return v === 0 ? 0 : map.toRaw[v - 1] + 1
+  }
+  return map.toRaw[v]
 }
 
 /**
  * Texto do slide que vira campo de edição ao clicar: mesma fonte, mesmo
- * lugar, formatação visível na hora. Esc ou clicar fora conclui.
+ * lugar, mesma cara — formatação aplicada sem marcador aparecer.
+ * Esc ou clicar fora conclui.
  */
 function EditableText({
   value,
@@ -235,19 +213,69 @@ function EditableText({
 }) {
   const [editing, setEditing] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const composing = useRef(false)
+  const clickPoint = useRef<{ x: number; y: number } | null>(null)
 
+  // Reconstrói o conteúdo e recoloca o cursor. As posições são no texto
+  // CRU: é o que distingue "fim do parágrafo 1" de "início do parágrafo 2"
+  // (visualmente coincidem, já que o \n\n separador não aparece).
   const renderEditor = (
     el: HTMLElement,
     val: string,
-    selStart: number,
-    selEnd: number,
+    rawStart: number,
+    rawEnd: number,
   ) => {
-    el.replaceChildren(buildEditingFragment(val))
-    // \n sentinela: sem ele, um Enter no fim do texto não mostra a linha nova
-    el.appendChild(document.createTextNode('\n'))
-    const max = val.length
-    editorSetSelection(el, Math.min(selStart, max), Math.min(selEnd, max))
+    // <br> sentinela em cada bloco: linha vazia final aparece e dá pra
+    // clicar nela (o serializador ignora o último <br> de cada bloco)
+    let place: (raw: number) => { node: Node; offset: number }
+    if (!paragraphs) {
+      el.replaceChildren(buildEditingFragment(val))
+      el.appendChild(document.createElement('br'))
+      const map = buildEditorMap(val, false)
+      place = (raw) => {
+        const r = Math.max(0, Math.min(raw, val.length))
+        return locateIn(el, map.toVis[r] ?? map.visLen)
+      }
+    } else {
+      el.replaceChildren()
+      const parts = val.split(PARA_RE)
+      const blocks: { text: string; rawStart: number; dom: HTMLElement }[] = []
+      let pos = 0
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i] ?? ''
+        if (i % 2 === 0) {
+          const p = document.createElement('p')
+          p.className = 'sl-edit-p'
+          p.appendChild(buildEditingFragment(part))
+          p.appendChild(document.createElement('br'))
+          el.appendChild(p)
+          blocks.push({ text: part, rawStart: pos, dom: p })
+        }
+        pos += part.length
+      }
+      place = (raw) => {
+        const r = Math.max(0, Math.min(raw, val.length))
+        let b = blocks[blocks.length - 1]
+        for (const blk of blocks) {
+          if (r <= blk.rawStart + blk.text.length) {
+            b = blk
+            break
+          }
+        }
+        const map = buildEditorMap(b.text, false)
+        const inBlock = Math.max(0, Math.min(r - b.rawStart, b.text.length))
+        return locateIn(b.dom, map.toVis[inBlock] ?? map.visLen)
+      }
+    }
+    const s = place(rawStart)
+    const e = place(rawEnd)
+    const range = document.createRange()
+    range.setStart(s.node, s.offset)
+    range.setEnd(e.node, e.offset)
+    const sel = window.getSelection()
+    if (sel) {
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
   }
 
   useEffect(() => {
@@ -255,30 +283,103 @@ function EditableText({
     const el = ref.current
     if (!el) return
     el.focus()
-    renderEditor(el, value, value.length, value.length)
+    renderEditor(el, value, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+    // Cursor cai onde a pessoa clicou — dá certo porque a edição desenha
+    // o texto exatamente no mesmo lugar do modo parado.
+    const pt = clickPoint.current
+    clickPoint.current = null
+    if (pt && typeof document.caretRangeFromPoint === 'function') {
+      const r = document.caretRangeFromPoint(pt.x, pt.y)
+      if (r && el.contains(r.startContainer)) {
+        const sel = window.getSelection()
+        if (sel) {
+          sel.removeAllRanges()
+          sel.addRange(r)
+        }
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing])
 
-  const handleInput = (el: HTMLElement) => {
-    const text = editorText(el)
-    const sel = editorSelection(el)
-    renderEditor(el, text, sel.start, sel.end)
-    onChange?.(text)
+  /** Seleção atual convertida pra posições no texto cru (com marcadores). */
+  const selRaw = (el: HTMLElement, val: string) => {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return { start: 0, end: 0 }
+    const range = sel.getRangeAt(0)
+
+    const rawPoint = (container: Node, offset: number, endSide: boolean): number => {
+      if (!paragraphs) {
+        return visToRawInline(val, visOffsetIn(el, container, offset), endSide)
+      }
+      const doms = Array.from(el.childNodes).filter(
+        (n) => n.nodeName === 'P' || n.nodeName === 'DIV',
+      ) as HTMLElement[]
+      const parts = val.split(PARA_RE)
+      const blocks: { text: string; rawStart: number }[] = []
+      let pos = 0
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i] ?? ''
+        if (i % 2 === 0) blocks.push({ text: part, rawStart: pos })
+        pos += part.length
+      }
+      if (container === el) {
+        // Cursor entre blocos: offset conta filhos do root
+        let count = 0
+        for (let i = 0; i < Math.min(offset, el.childNodes.length); i++) {
+          const k = el.childNodes[i]
+          if (k.nodeName === 'P' || k.nodeName === 'DIV') count++
+        }
+        const idx = Math.min(count, blocks.length - 1)
+        if (idx < 0) return 0
+        const b = blocks[idx]
+        return count >= doms.length ? b.rawStart + b.text.length : b.rawStart
+      }
+      // Sobe até o bloco (filho direto do root) que contém o ponto
+      let owner: Node | null = container
+      while (owner && owner !== el && owner.parentNode !== el) {
+        owner = owner.parentNode
+      }
+      const idx = owner ? doms.indexOf(owner as HTMLElement) : -1
+      if (idx < 0 || idx >= blocks.length) {
+        // Estrutura inesperada (mexida pelo navegador): melhor esforço
+        const map = buildEditorMap(val, true)
+        const vis = Math.min(visOffsetIn(el, container, offset), map.visLen)
+        return vis === 0 ? 0 : map.toRaw[vis - 1] + 1
+      }
+      const b = blocks[idx]
+      const vis = visOffsetIn(doms[idx], container, offset)
+      return b.rawStart + visToRawInline(b.text, vis, endSide)
+    }
+
+    if (range.collapsed) {
+      const p = rawPoint(range.startContainer, range.startOffset, true)
+      return { start: p, end: p }
+    }
+    return {
+      start: rawPoint(range.startContainer, range.startOffset, false),
+      end: rawPoint(range.endContainer, range.endOffset, true),
+    }
   }
 
-  const insertText = (el: HTMLElement, inserted: string) => {
-    const sel = editorSelection(el)
-    const v = editorText(el)
-    const nv = v.slice(0, sel.start) + inserted + v.slice(sel.end)
-    renderEditor(el, nv, sel.start + inserted.length, sel.start + inserted.length)
+  const handleInput = (el: HTMLElement) => {
+    onChange?.(editorValueOf(el, paragraphs))
+  }
+
+  const insertRaw = (el: HTMLElement, inserted: string) => {
+    const val = editorValueOf(el, paragraphs)
+    const { start, end } = selRaw(el, val)
+    const nv = val.slice(0, start) + inserted + val.slice(end)
+    const caret = start + inserted.length
+    renderEditor(el, nv, caret, caret)
     onChange?.(nv)
   }
 
   const apply = (marker: string) => {
     const el = ref.current
     if (!el) return
-    const sel = editorSelection(el)
-    const r = applyMarker(editorText(el), sel.start, sel.end, marker)
+    const val = editorValueOf(el, paragraphs)
+    const { start, end } = selRaw(el, val)
+    const r = applyMarker(val, start, end, marker)
     renderEditor(el, r.value, r.start, r.end)
     onChange?.(r.value)
   }
@@ -299,7 +400,10 @@ function EditableText({
         className={`${className} sl-editable`}
         style={style}
         title="Clique pra editar"
-        onClick={() => setEditing(true)}
+        onClick={(e) => {
+          clickPoint.current = { x: e.clientX, y: e.clientY }
+          setEditing(true)
+        }}
       >
         {value.trim() === '' ? (
           <span className="sl-edit-placeholder">{placeholder}</span>
@@ -355,20 +459,11 @@ function EditableText({
           contentEditable
           role="textbox"
           aria-multiline="true"
-          onInput={(e) => {
-            if (!composing.current) handleInput(e.currentTarget)
-          }}
-          onCompositionStart={() => {
-            composing.current = true
-          }}
-          onCompositionEnd={(e) => {
-            composing.current = false
-            handleInput(e.currentTarget)
-          }}
+          onInput={(e) => handleInput(e.currentTarget)}
           onBlur={() => setEditing(false)}
           onPaste={(e) => {
             e.preventDefault()
-            insertText(e.currentTarget, e.clipboardData.getData('text/plain'))
+            insertRaw(e.currentTarget, e.clipboardData.getData('text/plain'))
           }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
@@ -378,7 +473,7 @@ function EditableText({
             }
             if (e.key === 'Enter') {
               e.preventDefault()
-              insertText(e.currentTarget, '\n')
+              insertRaw(e.currentTarget, '\n')
               return
             }
             if ((e.ctrlKey || e.metaKey) && !e.altKey) {

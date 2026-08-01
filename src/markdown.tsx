@@ -56,41 +56,159 @@ export function renderParagraphs(text: string): ReactNode {
   return paragraphs.map((p, i) => <p key={i}>{renderInline(p.trim())}</p>)
 }
 
-/**
- * Versão DOM da renderização usada DURANTE a edição (contentEditable):
- * o estilo aparece na hora — negrito engorda, ==frase== cresce — e os
- * marcadores ficam visíveis porém apagadinhos, contando como caracteres
- * normais pra posição do cursor bater com o texto salvo.
- */
+// ===== Suporte ao editor direto na arte (contentEditable) =====
+// Durante a edição os marcadores NÃO aparecem: a pessoa vê o texto já
+// formatado, igualzinho ao slide final. O texto salvo continua sendo o
+// mini-markdown; o que faz a ponte é o mapa de posições visível↔cru e o
+// serializador que lê a formatação de volta do DOM.
+
+/** Separador de parágrafo — o mesmo critério do renderParagraphs. */
+export const PARA_RE = /(\n\s*\n)/
+
+function tokenOf(part: string): { m: number; inner: string } | null {
+  if (/^\*\*\*[^*]+\*\*\*$/.test(part)) return { m: 3, inner: part.slice(3, -3) }
+  if (/^\*\*[^*]+\*\*$/.test(part)) return { m: 2, inner: part.slice(2, -2) }
+  if (/^==[^=]+==$/.test(part)) return { m: 2, inner: part.slice(2, -2) }
+  if (/^\*[^*]+\*$/.test(part)) return { m: 1, inner: part.slice(1, -1) }
+  if (/^_[^_]+_$/.test(part)) return { m: 1, inner: part.slice(1, -1) }
+  return null
+}
+
+/** Conteúdo de UMA linha/bloco do editor: formatado, sem marcadores. */
 export function buildEditingFragment(text: string): DocumentFragment {
   const frag = document.createDocumentFragment()
-  const mk = (m: string) => {
-    const s = document.createElement('span')
-    s.className = 'sl-mk'
-    s.textContent = m
-    return s
-  }
-  const styled = (tag: string, cls: string | null, marker: string, inner: string) => {
-    const el = document.createElement(tag)
-    if (cls) el.className = cls
-    el.appendChild(buildEditingFragment(inner))
-    frag.append(mk(marker), el, mk(marker))
-  }
   for (const part of text.split(TOKEN_RE)) {
     if (!part) continue
-    if (/^\*\*\*[^*]+\*\*\*$/.test(part)) {
-      const strong = document.createElement('strong')
+    const t = tokenOf(part)
+    if (!t) {
+      frag.append(document.createTextNode(part))
+      continue
+    }
+    let el: HTMLElement
+    if (t.m === 3) {
+      el = document.createElement('strong')
       const em = document.createElement('em')
-      em.appendChild(buildEditingFragment(part.slice(3, -3)))
-      strong.appendChild(em)
-      frag.append(mk('***'), strong, mk('***'))
-    } else if (/^\*\*[^*]+\*\*$/.test(part)) styled('strong', null, '**', part.slice(2, -2))
-    else if (/^==[^=]+==$/.test(part)) styled('span', 'sl-big', '==', part.slice(2, -2))
-    else if (/^\*[^*]+\*$/.test(part)) styled('em', null, '*', part.slice(1, -1))
-    else if (/^_[^_]+_$/.test(part)) styled('u', null, '_', part.slice(1, -1))
-    else frag.append(document.createTextNode(part))
+      em.appendChild(buildEditingFragment(t.inner))
+      el.appendChild(em)
+    } else if (part.startsWith('**')) {
+      el = document.createElement('strong')
+      el.appendChild(buildEditingFragment(t.inner))
+    } else if (part.startsWith('==')) {
+      el = document.createElement('span')
+      el.className = 'sl-big'
+      el.appendChild(buildEditingFragment(t.inner))
+    } else if (part.startsWith('*')) {
+      el = document.createElement('em')
+      el.appendChild(buildEditingFragment(t.inner))
+    } else {
+      el = document.createElement('u')
+      el.appendChild(buildEditingFragment(t.inner))
+    }
+    frag.append(el)
   }
   return frag
+}
+
+export interface EditorMap {
+  /** índice no texto cru (0..len) -> índice visível */
+  toVis: number[]
+  /** índice visível -> índice do caractere no texto cru */
+  toRaw: number[]
+  visLen: number
+}
+
+/**
+ * Mapa entre o texto cru (com marcadores) e o texto visível (sem eles).
+ * Em modo parágrafos, o separador \n\n também é invisível (vira espaço
+ * entre blocos, não caracteres).
+ */
+export function buildEditorMap(value: string, paragraphs: boolean): EditorMap {
+  const toVis = new Array<number>(value.length + 1)
+  const toRaw: number[] = []
+  let v = 0
+  const inline = (text: string, base: number) => {
+    let pos = base
+    for (const part of text.split(TOKEN_RE)) {
+      if (!part) continue
+      const t = tokenOf(part)
+      if (t) {
+        for (let k = 0; k < t.m; k++) toVis[pos + k] = v
+        inline(t.inner, pos + t.m)
+        for (let k = 0; k < t.m; k++) toVis[pos + part.length - t.m + k] = v
+      } else {
+        for (let k = 0; k < part.length; k++) {
+          toVis[pos + k] = v
+          toRaw[v] = pos + k
+          v++
+        }
+      }
+      pos += part.length
+    }
+  }
+  if (!paragraphs) {
+    inline(value, 0)
+  } else {
+    const parts = value.split(PARA_RE)
+    let pos = 0
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i] ?? ''
+      if (i % 2 === 1) {
+        for (let k = 0; k < part.length; k++) toVis[pos + k] = v
+      } else {
+        inline(part, pos)
+      }
+      pos += part.length
+    }
+  }
+  toVis[value.length] = v
+  return { toVis, toRaw, visLen: v }
+}
+
+/**
+ * Lê o texto cru de volta do DOM do editor: a estrutura (strong/em/u/
+ * sl-big) vira marcadores de novo. O <br> sentinela no fim de cada bloco
+ * (posto só pra linha vazia final aparecer) não conta.
+ */
+export function editorValueOf(root: HTMLElement, paragraphs: boolean): string {
+  const mdOf = (node: Node): string => {
+    let out = ''
+    const kids = node.childNodes
+    for (let i = 0; i < kids.length; i++) {
+      const n = kids[i]
+      if (n.nodeType === Node.TEXT_NODE) {
+        out += (n as Text).data
+      } else if (n.nodeName === 'BR') {
+        if (i < kids.length - 1) out += '\n'
+      } else {
+        const inner = mdOf(n)
+        if (inner === '') continue
+        const name = n.nodeName
+        if (name === 'STRONG' || name === 'B') out += `**${inner}**`
+        else if (name === 'EM' || name === 'I') out += `*${inner}*`
+        else if (name === 'U') out += `_${inner}_`
+        else if ((n as HTMLElement).classList?.contains('sl-big')) out += `==${inner}==`
+        else out += inner
+      }
+    }
+    return out
+  }
+  if (!paragraphs) return mdOf(root)
+  const blocks: string[] = []
+  root.childNodes.forEach((n) => {
+    if (n.nodeName === 'P' || n.nodeName === 'DIV') {
+      blocks.push(mdOf(n))
+    } else {
+      const t =
+        n.nodeType === Node.TEXT_NODE
+          ? (n as Text).data
+          : n.nodeName === 'BR'
+            ? ''
+            : mdOf(n)
+      if (blocks.length === 0) blocks.push(t)
+      else blocks[blocks.length - 1] += t
+    }
+  })
+  return blocks.join('\n\n')
 }
 
 /**
@@ -112,6 +230,9 @@ export function applyMarker(
   while (e > s && /\s/.test(value[e - 1])) e--
   while (s > 0 && isWord(value[s - 1]) && isWord(value[s])) s--
   while (e < value.length && isWord(value[e - 1]) && isWord(value[e])) e++
+  // Nada selecionado e sem palavra em volta: não tem o que formatar.
+  if (s === e) return { value, start: selStart, end: selEnd }
+
   const sel = value.slice(s, e)
   const before = value.slice(0, s)
   const after = value.slice(e)
