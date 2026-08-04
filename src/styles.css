@@ -1172,19 +1172,18 @@ body {
   color: #fff;
 }
 
-.sl-pt-title {
-  font-weight: 700;
-  font-size: 1.4em;
-  line-height: 1.18;
-  margin-bottom: 0.62em;
-}
-
-.sl-pt-body p {
+.sl-pt-text p {
   margin: 0 0 0.85em;
 }
 
-.sl-pt-body p:last-child {
+.sl-pt-text p:last-child {
   margin-bottom: 0;
+}
+
+/* Abertura em destaque respira mais que os parágrafos comuns */
+.sl-pt-text p:first-child:has(.sl-big) {
+  margin-bottom: 0.62em;
+  line-height: 1.2;
 }
 
 /* ===== Edição direta no slide + frase maior ===== */

@@ -755,13 +755,13 @@ export default function App() {
             : []
         : slide.type === 'split'
           ? ['top', 'bottom']
-          : slide.type === 'photoTop'
-            ? ['title', 'body']
-            : slide.type === 'development' || slide.type === 'book'
-              ? ['body']
-              : 'text' in slide
-                ? ['text']
-                : []
+          : slide.type === 'development' ||
+              slide.type === 'book' ||
+              slide.type === 'photoTop'
+            ? ['body']
+            : 'text' in slide
+              ? ['text']
+              : []
     if (slots.length === 0) return null
     if (pasteTurn.current.id !== slide.id) {
       pasteTurn.current = { id: slide.id, media: 0, text: 0 }
@@ -776,7 +776,6 @@ export default function App() {
     if (s.type === 'split' && (field === 'top' || field === 'bottom')) {
       return { ...s, [field]: { ...s[field], text } } as Slide
     }
-    if (field === 'title' && s.type === 'photoTop') return { ...s, title: text }
     if (
       field === 'body' &&
       (s.type === 'development' || s.type === 'book' || s.type === 'photoTop')

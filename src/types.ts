@@ -75,12 +75,10 @@ export interface FinalSlide extends BaseSlide {
   text: string
 }
 
-/** Foto deitada em cima + bloco preto embaixo com título e parágrafos. */
+/** Foto deitada em cima + bloco preto embaixo com o texto. */
 export interface PhotoTopSlide extends BaseSlide {
   type: 'photoTop'
   media: SlideMedia | null
-  /** Frase de abertura, em negrito e maior que o corpo. */
-  title: string
   body: string
 }
 

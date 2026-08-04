@@ -92,9 +92,8 @@ export function makeSlide(type: SlideType): Slide {
         ...base,
         type,
         media: null,
-        title: 'A frase de abertura entra aqui, curta e forte.',
         body:
-          'Embaixo da foto o texto respira: o fundo preto garante leitura sem precisar de sombra nenhuma. Escreva em parágrafos curtos, de duas ou três linhas.\n\nA foto deitada em cima funciona melhor com imagem panorâmica ou duas cenas lado a lado — é o formato que puxa o olho antes da leitura.',
+          '==**A frase de abertura entra aqui, curta e forte.**==\n\nEmbaixo da foto o texto respira: o fundo preto garante leitura sem precisar de sombra nenhuma. Escreva em parágrafos curtos, de duas ou três linhas.\n\nA foto deitada em cima funciona melhor com imagem panorâmica ou duas cenas lado a lado — é o formato que puxa o olho antes da leitura.',
       }
       return s
     }
@@ -144,9 +143,8 @@ export function defaultProject(): Project {
     'Aqui entra o desenvolvimento: você conecta os dados que mostrou e explica o que eles significam juntos. Parágrafos curtos, de duas ou três linhas — a pessoa lê no celular, com o dedo pronto pra deslizar.\n\nColoque uma foto de fundo neste slide: a sombra escura garante a leitura por cima dela.\n\n**A conclusão forte fecha em negrito.**'
 
   const foto1 = makeSlide('photoTop') as PhotoTopSlide
-  foto1.title = 'O insumo mais caro é *tempo*.'
   foto1.body =
-    'O Desenvolvimento 3 é este: foto deitada em cima, bloco preto embaixo. Serve pra quando a imagem precisa aparecer inteira, sem texto por cima dela.\n\nUse a frase de abertura pra entregar a ideia e os parágrafos pra sustentar. Intercale com os outros tipos: é o revezamento que segura a leitura até o fim.'
+    '==**O insumo mais caro é *tempo*.**==\n\nO Desenvolvimento 3 é este: foto deitada em cima, bloco preto embaixo. Serve pra quando a imagem precisa aparecer inteira, sem texto por cima dela.\n\nA primeira linha é só o texto com Negrito + Frase maior — dá pra tirar, mudar de lugar ou repetir onde quiser.'
 
   const duo1 = makeSlide('final') as FinalSlide
   duo1.text =
@@ -161,9 +159,8 @@ export function defaultProject(): Project {
     'Mais um respiro aqui: quanto mais denso o carrossel, mais esses intervalos importam.'
 
   const foto2 = makeSlide('photoTop') as PhotoTopSlide
-  foto2.title = 'A imagem entra inteira, sem nada por cima.'
   foto2.body =
-    'Repita o formato quando tiver uma foto que não pode ser cortada nem escurecida — comparação lado a lado, antes e depois, cena aberta.'
+    '==**A imagem entra inteira, sem nada por cima.**==\n\nRepita o formato quando tiver uma foto que não pode ser cortada nem escurecida — comparação lado a lado, antes e depois, cena aberta.'
 
   const dev3 = makeSlide('development') as DevelopmentSlide
   dev3.body =
@@ -541,11 +538,20 @@ export function normalizeProject(data: unknown): Project | null {
         merged.media = sanitizeMedia(merged.media)
         merged.text = str(merged.text, '')
         break
-      case 'photoTop':
+      case 'photoTop': {
         merged.media = sanitizeMedia(merged.media)
-        merged.title = str(merged.title, '')
         merged.body = str(merged.body, '')
+        // As duas caixas viraram uma só: o título de rascunhos antigos
+        // entra como primeiro parágrafo, já em destaque.
+        const titulo = str((sl as { title?: unknown }).title, '').trim()
+        if (titulo !== '') {
+          const destaque = titulo.startsWith('==') ? titulo : `==**${titulo}**==`
+          merged.body =
+            merged.body.trim() === '' ? destaque : `${destaque}\n\n${merged.body}`
+        }
+        delete (merged as { title?: unknown }).title
         break
+      }
     }
     slides.push(merged)
   }

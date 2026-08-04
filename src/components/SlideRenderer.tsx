@@ -22,7 +22,7 @@ import {
 } from '../markdown'
 
 /** Campo de texto de um slide, pra edição direto na arte. */
-export type EditField = 'text' | 'body' | 'top' | 'bottom' | 'title'
+export type EditField = 'text' | 'body' | 'top' | 'bottom'
 
 export const SLIDE_W = 1080
 export const SLIDE_H = 1350
@@ -869,21 +869,14 @@ function PhotoTopLayers({
           </div>
         )}
       </div>
-      <div className="sl-pt-text" style={textStyle}>
-        <EditableText
-          value={slide.title}
-          onChange={onTextEdit && ((v) => onTextEdit('title', v))}
-          className="sl-pt-title"
-          placeholder="Clique e escreva a frase de abertura…"
-        />
-        <EditableText
-          value={slide.body}
-          onChange={onTextEdit && ((v) => onTextEdit('body', v))}
-          className="sl-pt-body"
-          paragraphs
-          placeholder="Clique e escreva o texto…"
-        />
-      </div>
+      <EditableText
+        value={slide.body}
+        onChange={onTextEdit && ((v) => onTextEdit('body', v))}
+        className="sl-pt-text"
+        style={textStyle}
+        paragraphs
+        placeholder="Clique e escreva o texto…"
+      />
     </>
   )
 }

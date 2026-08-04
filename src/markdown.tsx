@@ -9,8 +9,14 @@ import { Fragment } from 'react'
 // @nome_de_usuario não pode virar formatação.
 // "***texto***" = negrito + itálico juntos (vem antes do "**" no teste
 // porque senão o negrito engoliria dois dos três asteriscos).
-const TOKEN_RE =
-  /(\*\*\*[^*\n]+?\*\*\*|\*\*[^*]+?\*\*|==[^=\n]+?==|\*[^*\n]+?\*|(?<![\p{L}\p{N}_])_[^_\n]+?_(?![\p{L}\p{N}_]))/gu
+// O miolo do negrito aceita "*" solto, pra caber itálico dentro dele
+// ("**frase com *uma palavra* em itálico**") — só não pode ser "**".
+const NEGRITO = '\\*\\*(?:[^*]|\\*(?!\\*))+?\\*\\*'
+const TOKEN_RE = new RegExp(
+  `(\\*\\*\\*[^*\\n]+?\\*\\*\\*|${NEGRITO}|==[^=\\n]+?==|\\*[^*\\n]+?\\*|(?<![\\p{L}\\p{N}_])_[^_\\n]+?_(?![\\p{L}\\p{N}_]))`,
+  'gu',
+)
+const SO_NEGRITO = new RegExp(`^${NEGRITO}$`, 'u')
 
 function withBreaks(text: string, keyBase: string): ReactNode[] {
   const lines = text.split('\n')
@@ -31,7 +37,7 @@ export function renderInline(text: string): ReactNode {
         </strong>
       )
     }
-    if (/^\*\*[^*]+\*\*$/.test(part)) {
+    if (SO_NEGRITO.test(part)) {
       return <strong key={i}>{renderInline(part.slice(2, -2))}</strong>
     }
     if (/^==[^=]+==$/.test(part)) {
@@ -89,8 +95,7 @@ const BIT_OF: Record<string, number> = {
 function tokenOf(part: string): { m: number; inner: string; bit: number } | null {
   if (/^\*\*\*[^*]+\*\*\*$/.test(part))
     return { m: 3, inner: part.slice(3, -3), bit: BOLD | ITAL }
-  if (/^\*\*[^*]+\*\*$/.test(part))
-    return { m: 2, inner: part.slice(2, -2), bit: BOLD }
+  if (SO_NEGRITO.test(part)) return { m: 2, inner: part.slice(2, -2), bit: BOLD }
   if (/^==[^=]+==$/.test(part)) return { m: 2, inner: part.slice(2, -2), bit: BIG }
   if (/^\*[^*]+\*$/.test(part)) return { m: 1, inner: part.slice(1, -1), bit: ITAL }
   if (/^_[^_]+_$/.test(part)) return { m: 1, inner: part.slice(1, -1), bit: UND }
@@ -138,16 +143,24 @@ export function parseLine(raw: string): {
 /** Remonta a linha a partir das letras e seus formatos, sempre na mesma
  *  ordem de aninhamento — nunca sobra marcador solto no texto. */
 export function serializeLine(text: string, marks: number[]): string {
+  const mkOf = new Map(NESTING)
   let out = ''
-  let aberto = 0
+  // Pilha do que está aberto, sempre na ordem de aninhamento. Fechar só o
+  // necessário é o que produz "**frase com *uma palavra* dentro**" em vez
+  // de picotar o negrito em pedaços a cada mudança.
+  let pilha: number[] = []
   for (let i = 0; i <= text.length; i++) {
     const atual = i < text.length ? marks[i] : 0
-    if (atual !== aberto) {
-      for (let k = NESTING.length - 1; k >= 0; k--) {
-        if (aberto & NESTING[k][0]) out += NESTING[k][1]
-      }
-      for (const [bit, mk] of NESTING) if (atual & bit) out += mk
-      aberto = atual
+    const alvo = NESTING.filter(([bit]) => atual & bit).map(([bit]) => bit)
+    let comum = 0
+    while (comum < pilha.length && comum < alvo.length && pilha[comum] === alvo[comum]) {
+      comum++
+    }
+    for (let k = pilha.length - 1; k >= comum; k--) out += mkOf.get(pilha[k])
+    pilha = pilha.slice(0, comum)
+    for (let k = comum; k < alvo.length; k++) {
+      out += mkOf.get(alvo[k])
+      pilha.push(alvo[k])
     }
     if (i < text.length) out += text[i]
   }
