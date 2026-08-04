@@ -7,6 +7,7 @@ import type {
   SlideType,
   SplitSlide,
 } from './types'
+import type { EditField } from './components/SlideRenderer'
 import {
   LETTER_SPACING_MAX,
   LETTER_SPACING_MIN,
@@ -736,8 +737,58 @@ export default function App() {
     })
   }
 
+  /**
+   * Colar nunca pergunta nada: o Ctrl+V vale de primeira e vai revezando
+   * os espaços de cima pra baixo — primeiro V na metade de cima, segundo
+   * na de baixo, e recomeça. Vale igual pra foto e pra texto, cada um com
+   * seu próprio revezamento.
+   */
+  const pasteTurn = useRef({ id: '', media: 0, text: 0 })
+
+  function nextPasteSlot(slide: Slide, kind: 'media' | 'text'): string | null {
+    const slots =
+      kind === 'media'
+        ? slide.type === 'split'
+          ? ['top', 'bottom']
+          : 'media' in slide
+            ? ['media']
+            : []
+        : slide.type === 'split'
+          ? ['top', 'bottom']
+          : slide.type === 'photoTop'
+            ? ['title', 'body']
+            : slide.type === 'development' || slide.type === 'book'
+              ? ['body']
+              : 'text' in slide
+                ? ['text']
+                : []
+    if (slots.length === 0) return null
+    if (pasteTurn.current.id !== slide.id) {
+      pasteTurn.current = { id: slide.id, media: 0, text: 0 }
+    }
+    const i = pasteTurn.current[kind]
+    pasteTurn.current[kind] = (i + 1) % slots.length
+    return slots[i % slots.length]
+  }
+
+  /** Escreve num campo de texto do slide, seja qual for o tipo. */
+  function setTextField(s: Slide, field: EditField, text: string): Slide {
+    if (s.type === 'split' && (field === 'top' || field === 'bottom')) {
+      return { ...s, [field]: { ...s[field], text } } as Slide
+    }
+    if (field === 'title' && s.type === 'photoTop') return { ...s, title: text }
+    if (
+      field === 'body' &&
+      (s.type === 'development' || s.type === 'book' || s.type === 'photoTop')
+    ) {
+      return { ...s, body: text }
+    }
+    if (field === 'text' && 'text' in s) return { ...s, text } as Slide
+    return s
+  }
+
   // Ctrl+V / Cmd+V em qualquer lugar (fora dos campos de texto) cola a
-  // imagem copiada no primeiro espaço livre do slide selecionado.
+  // imagem ou o texto copiado no slide selecionado.
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const target = e.target as HTMLElement | null
@@ -758,28 +809,9 @@ export default function App() {
       if (item) {
         const file = item.getAsFile()
         if (!file) return
-        let slot: MediaSlot | null = null
-        let occupied = false
-        if (current.type === 'split') {
-          // primeiro V preenche a metade de cima, o segundo a de baixo
-          if (!current.top.media) slot = 'top'
-          else if (!current.bottom.media) slot = 'bottom'
-          else {
-            slot = 'top'
-            occupied = true
-          }
-        } else if ('media' in current) {
-          slot = 'media'
-          occupied = current.media !== null
-        }
+        const slot = nextPasteSlot(current, 'media') as MediaSlot | null
         if (!slot) return
         e.preventDefault()
-        if (
-          occupied &&
-          !window.confirm('Este slide já tem foto. Substituir pela imagem colada?')
-        ) {
-          return
-        }
         void setSlideMediaFromFile(current.id, slot, file)
         return
       }
@@ -787,42 +819,10 @@ export default function App() {
       // Sem imagem no clipboard: texto colado vai direto pro bloco de texto
       const text = e.clipboardData?.getData('text/plain')?.trim()
       if (!text) return
+      const field = nextPasteSlot(current, 'text') as EditField | null
+      if (!field) return
       e.preventDefault()
-      if (current.type === 'split') {
-        const target =
-          current.top.text.trim() === ''
-            ? 'top'
-            : current.bottom.text.trim() === ''
-              ? 'bottom'
-              : null
-        const slot2 =
-          target ??
-          (window.confirm('As duas metades já têm texto. Substituir o da metade de cima?')
-            ? 'top'
-            : null)
-        if (!slot2) return
-        updateSlide(current.id, (s) =>
-          s.type === 'split' ? ({ ...s, [slot2]: { ...s[slot2], text } } as Slide) : s,
-        )
-        return
-      }
-      const currentText =
-        current.type === 'development' || current.type === 'book'
-          ? current.body
-          : 'text' in current
-            ? current.text
-            : ''
-      if (
-        currentText.trim() !== '' &&
-        !window.confirm('Este slide já tem texto. Substituir pelo colado?')
-      ) {
-        return
-      }
-      updateSlide(current.id, (s) => {
-        if (s.type === 'development' || s.type === 'book') return { ...s, body: text }
-        if ('text' in s) return { ...s, text } as Slide
-        return s
-      })
+      updateSlide(current.id, (s) => setTextField(s, field, text))
     }
     document.addEventListener('paste', onPaste)
     return () => document.removeEventListener('paste', onPaste)
@@ -1450,32 +1450,7 @@ export default function App() {
                     project={project}
                     width={previewWidth}
                     onTextEdit={(field, v) =>
-                      updateSlide(selected.id, (s) => {
-                        if (
-                          s.type === 'split' &&
-                          (field === 'top' || field === 'bottom')
-                        ) {
-                          return {
-                            ...s,
-                            [field]: { ...s[field], text: v },
-                          } as Slide
-                        }
-                        if (
-                          field === 'body' &&
-                          (s.type === 'development' ||
-                            s.type === 'book' ||
-                            s.type === 'photoTop')
-                        ) {
-                          return { ...s, body: v }
-                        }
-                        if (field === 'title' && s.type === 'photoTop') {
-                          return { ...s, title: v }
-                        }
-                        if (field === 'text' && 'text' in s) {
-                          return { ...s, text: v } as Slide
-                        }
-                        return s
-                      })
+                      updateSlide(selected.id, (s) => setTextField(s, field, v))
                     }
                   />
                 </div>
