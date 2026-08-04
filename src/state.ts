@@ -507,6 +507,7 @@ export function normalizeProject(data: unknown): Project | null {
         const freshSplit = fresh as SplitSlide
         merged.top = sanitizeHalf(merged.top, freshSplit.top)
         merged.bottom = sanitizeHalf(merged.bottom, freshSplit.bottom)
+        merged.orientation = merged.orientation === 'vertical' ? 'vertical' : 'horizontal'
         break
       }
       case 'comparison':

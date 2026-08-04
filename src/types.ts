@@ -37,9 +37,18 @@ export interface SplitHalf {
   text: string
 }
 
-/** Tela partida: duas fotos e dois textos no mesmo slide (cima/baixo). */
+/** Como as duas metades se dividem: deitada (cima/baixo) ou em pé (lados). */
+export type SplitOrientation = 'horizontal' | 'vertical'
+
+/**
+ * Tela partida: duas fotos e dois textos no mesmo slide. Na horizontal as
+ * metades ficam em cima e embaixo; na vertical, à esquerda e à direita —
+ * e aí "top" é a da esquerda e "bottom" a da direita.
+ */
 export interface SplitSlide extends BaseSlide {
   type: 'split'
+  /** Sem valor = horizontal (como eram todas antes). */
+  orientation?: SplitOrientation
   top: SplitHalf
   bottom: SplitHalf
 }

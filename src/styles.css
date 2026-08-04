@@ -934,6 +934,37 @@ body {
   top: 675px;
 }
 
+/* tela partida em pé: as metades viram colunas e o texto de cada uma
+   fica centralizado dentro da própria coluna, no rodapé */
+.sl-split-half--v {
+  top: 0;
+  height: 1350px;
+  width: 540px;
+}
+
+.sl-split-half--left {
+  left: 0;
+  right: auto;
+}
+
+.sl-split-half--right {
+  left: 540px;
+  right: auto;
+}
+
+.sl-split-half--v .sl-split-text {
+  left: 46px;
+  right: 46px;
+}
+
+.sl-split-half--v .sl-split-grad {
+  height: 40%;
+}
+
+.sl-split-half--v .sl-split-placeholder {
+  inset: 90px 46px;
+}
+
 .sl-media-abs {
   position: absolute;
   inset: 0;

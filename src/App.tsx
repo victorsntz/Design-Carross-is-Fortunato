@@ -5,6 +5,7 @@ import type {
   Slide,
   SlideMedia,
   SlideType,
+  SplitOrientation,
   SplitSlide,
 } from './types'
 import type { EditField } from './components/SlideRenderer'
@@ -61,8 +62,19 @@ const TYPE_COLOR: Record<SlideType, string> = {
 
 // Os quatro tipos do formato. Os antigos (foto de fundo, livro) continuam
 // renderizando em carrosséis já salvos, mas saíram do menu.
-const ADD_OPTIONS: { type: SlideType; label: string; hint: string }[] = [
-  { type: 'split', label: 'Tela partida', hint: 'o par de comparação' },
+const ADD_OPTIONS: {
+  type: SlideType
+  label: string
+  hint: string
+  orientation?: SplitOrientation
+}[] = [
+  { type: 'split', label: 'Tela partida', hint: 'o par de comparação, deitado' },
+  {
+    type: 'split',
+    label: 'Tela partida em pé',
+    hint: 'o par lado a lado, texto embaixo de cada foto',
+    orientation: 'vertical',
+  },
   { type: 'development', label: 'Desenvolvimento 1', hint: 'foto de fundo + texto' },
   { type: 'final', label: 'Desenvolvimento 2', hint: 'texto à esquerda, foto à direita' },
   { type: 'photoTop', label: 'Desenvolvimento 3', hint: 'foto deitada em cima, texto embaixo' },
@@ -72,8 +84,18 @@ const ADD_OPTIONS: { type: SlideType; label: string; hint: string }[] = [
 const HALF_COLOR = { top: '#e0a86e', bottom: '#7fb5e0' } as const
 
 /** Desenho do layout de cada tipo, pro botão de adicionar ser visual. */
-function TypeIcon({ type }: { type: SlideType }) {
+function TypeIcon({ type, vertical = false }: { type: SlideType; vertical?: boolean }) {
   const c = TYPE_COLOR[type]
+  if (type === 'split' && vertical) {
+    return (
+      <svg className="type-icon" viewBox="0 0 26 32" aria-hidden>
+        <rect x="1" y="1" width="11.5" height="30" rx="2" fill="none" stroke={c} strokeWidth="1.5" />
+        <rect x="13.5" y="1" width="11.5" height="30" rx="2" fill="none" stroke={c} strokeWidth="1.5" />
+        <line x1="3.5" y1="26" x2="10" y2="26" stroke={c} strokeWidth="1.5" />
+        <line x1="16" y1="26" x2="22.5" y2="26" stroke={c} strokeWidth="1.5" />
+      </svg>
+    )
+  }
   if (type === 'split') {
     return (
       <svg className="type-icon" viewBox="0 0 26 32" aria-hidden>
@@ -616,8 +638,9 @@ export default function App() {
     }))
   }
 
-  function addSlide(type: SlideType) {
+  function addSlide(type: SlideType, orientation?: SplitOrientation) {
     const slide = makeSlide(type)
+    if (slide.type === 'split' && orientation) slide.orientation = orientation
     setProject((p) => {
       // O novo slide entra logo depois do que está sendo editado:
       // editando o 3, o novo vira o 4.
@@ -1341,13 +1364,13 @@ export default function App() {
             <h2 className="card-title">Adicionar slide</h2>
             {ADD_OPTIONS.map((opt) => (
               <button
-                key={opt.type}
+                key={`${opt.type}-${opt.orientation ?? 'h'}`}
                 type="button"
                 className="btn btn--full btn--add"
                 style={{ borderLeft: `3px solid ${TYPE_COLOR[opt.type]}` }}
-                onClick={() => addSlide(opt.type)}
+                onClick={() => addSlide(opt.type, opt.orientation)}
               >
-                <TypeIcon type={opt.type} />
+                <TypeIcon type={opt.type} vertical={opt.orientation === 'vertical'} />
                 <span className="btn-add-label">
                   <span>+ {opt.label}</span>
                   <small>{opt.hint}</small>
@@ -1548,7 +1571,13 @@ export default function App() {
                         style={{ borderLeft: `3px solid ${HALF_COLOR[slot]}` }}
                       >
                         <h2 className="card-title" style={{ color: HALF_COLOR[slot] }}>
-                          {slot === 'top' ? 'Foto de cima' : 'Foto de baixo'}
+                          {(selected as SplitSlide).orientation === 'vertical'
+                            ? slot === 'top'
+                              ? 'Foto da esquerda'
+                              : 'Foto da direita'
+                            : slot === 'top'
+                              ? 'Foto de cima'
+                              : 'Foto de baixo'}
                         </h2>
                         <div className="control-row control-row--wrap">
                           <FileButton
@@ -1636,6 +1665,36 @@ export default function App() {
 
               <section className="card">
                 <h2 className="card-title">Slide</h2>
+                {selected.type === 'split' && (
+                  <div className="control-row">
+                    <span className="control-label">Divisão</span>
+                    <div className="segmented">
+                      {(
+                        [
+                          ['horizontal', 'Deitada'],
+                          ['vertical', 'Em pé'],
+                        ] as const
+                      ).map(([modo, rotulo]) => (
+                        <button
+                          key={modo}
+                          type="button"
+                          className={
+                            ((selected as SplitSlide).orientation ?? 'horizontal') === modo
+                              ? 'seg seg--active'
+                              : 'seg'
+                          }
+                          onClick={() =>
+                            updateSlide(selected.id, (s) =>
+                              s.type === 'split' ? { ...s, orientation: modo } : s,
+                            )
+                          }
+                        >
+                          {rotulo}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {selected.type === 'comparison' && (
                   <div className="control-row">
                     <span className="control-label">Posição da frase</span>

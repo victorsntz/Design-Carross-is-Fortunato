@@ -622,6 +622,7 @@ function Placeholder({ label }: { label: string }) {
 function SplitHalfLayers({
   half,
   region,
+  vertical,
   textStyle,
   mode,
   still,
@@ -629,20 +630,31 @@ function SplitHalfLayers({
 }: {
   half: SplitHalf
   region: 'top' | 'bottom'
+  vertical: boolean
   textStyle: CSSProperties
   mode: RenderMode
   still: boolean
   onEdit?: (v: string) => void
 }) {
+  // Na vertical as mesmas metades viram esquerda e direita.
+  const lado = vertical ? (region === 'top' ? 'left' : 'right') : region
   return (
-    <div className={`sl-split-half sl-split-half--${region}`}>
+    <div
+      className={`sl-split-half sl-split-half--${lado}${vertical ? ' sl-split-half--v' : ''}`}
+    >
       {half.media && mode !== 'overlay' && (
         <MediaEl media={half.media} className="sl-media-abs" still={still} />
       )}
       {!half.media && mode === 'full' && (
         <div className="sl-split-placeholder">
           <span>
-            {region === 'top' ? 'Foto da metade de cima' : 'Foto da metade de baixo'}
+            {vertical
+              ? region === 'top'
+                ? 'Foto da esquerda'
+                : 'Foto da direita'
+              : region === 'top'
+                ? 'Foto da metade de cima'
+                : 'Foto da metade de baixo'}
           </span>
         </div>
       )}
@@ -652,7 +664,15 @@ function SplitHalfLayers({
         onChange={onEdit}
         className="sl-split-text"
         style={textStyle}
-        placeholder={region === 'top' ? 'Clique e escreva o texto de cima…' : 'Clique e escreva o texto de baixo…'}
+        placeholder={
+          vertical
+            ? region === 'top'
+              ? 'Clique e escreva o texto da esquerda…'
+              : 'Clique e escreva o texto da direita…'
+            : region === 'top'
+              ? 'Clique e escreva o texto de cima…'
+              : 'Clique e escreva o texto de baixo…'
+        }
       />
     </div>
   )
@@ -670,11 +690,13 @@ function SplitLayers({
   onTextEdit?: (field: EditField, value: string) => void
 }) {
   const textStyle = slideTextStyle(slide)
+  const vertical = slide.orientation === 'vertical'
   return (
     <>
       <SplitHalfLayers
         half={slide.top}
         region="top"
+        vertical={vertical}
         textStyle={textStyle}
         mode={mode}
         still={still}
@@ -683,6 +705,7 @@ function SplitLayers({
       <SplitHalfLayers
         half={slide.bottom}
         region="bottom"
+        vertical={vertical}
         textStyle={textStyle}
         mode={mode}
         still={still}

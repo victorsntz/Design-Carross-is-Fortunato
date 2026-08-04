@@ -107,15 +107,18 @@ interface MediaLayer {
 /** Onde cada mídia fica no slide, em px do slide (1080x1350). */
 function mediaLayers(slide: Slide): MediaLayer[] {
   if (slide.type === 'split') {
-    const half = SLIDE_H / 2
+    // Em pé as metades são colunas; deitada, faixas. Mesma conta do CSS.
+    const vertical = slide.orientation === 'vertical'
+    const w = vertical ? SLIDE_W / 2 : SLIDE_W
+    const h = vertical ? SLIDE_H : SLIDE_H / 2
     const layers: MediaLayer[] = []
     if (slide.top.media) {
-      layers.push({ media: slide.top.media, rect: { x: 0, y: 0, w: SLIDE_W, h: half } })
+      layers.push({ media: slide.top.media, rect: { x: 0, y: 0, w, h } })
     }
     if (slide.bottom.media) {
       layers.push({
         media: slide.bottom.media,
-        rect: { x: 0, y: half, w: SLIDE_W, h: half },
+        rect: { x: vertical ? w : 0, y: vertical ? 0 : h, w, h },
       })
     }
     return layers
