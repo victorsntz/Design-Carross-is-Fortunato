@@ -3,7 +3,12 @@ import JSZip from 'jszip'
 import type { Project, Slide, SlideMedia } from './types'
 import { withRenderedSlide } from './exportRender'
 import { videoPosterFrame } from './media'
-import { FINAL_MEDIA_FRAC, SLIDE_H, SLIDE_W } from './components/SlideRenderer'
+import {
+  FINAL_MEDIA_FRAC,
+  PHOTO_TOP_H,
+  SLIDE_H,
+  SLIDE_W,
+} from './components/SlideRenderer'
 
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
@@ -114,6 +119,10 @@ function mediaLayers(slide: Slide): MediaLayer[] {
       })
     }
     return layers
+  }
+  if (slide.type === 'photoTop') {
+    if (!slide.media) return []
+    return [{ media: slide.media, rect: { x: 0, y: 0, w: SLIDE_W, h: PHOTO_TOP_H } }]
   }
   if (slide.type === 'final') {
     if (!slide.media) return []

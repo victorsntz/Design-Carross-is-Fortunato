@@ -4,6 +4,7 @@ import type {
   ComparisonSlide,
   DevelopmentSlide,
   FinalSlide,
+  PhotoTopSlide,
   Project,
   Slide,
   SlideMedia,
@@ -21,13 +22,16 @@ import {
 } from '../markdown'
 
 /** Campo de texto de um slide, pra edição direto na arte. */
-export type EditField = 'text' | 'body' | 'top' | 'bottom'
+export type EditField = 'text' | 'body' | 'top' | 'bottom' | 'title'
 
 export const SLIDE_W = 1080
 export const SLIDE_H = 1350
 
 /** Fração da largura ocupada pela foto no slide final. */
 export const FINAL_MEDIA_FRAC = 0.44
+
+/** Altura da faixa de foto do Desenvolvimento 3 (igual ao CSS .sl-pt-media). */
+export const PHOTO_TOP_H = 660
 
 // Calibrado pra densidade real do formato: os slides carregam bastante
 // texto, então os padrões assumem parágrafos cheios. Cada tipo tem sua
@@ -38,6 +42,7 @@ const FONT_SIZES: Record<Slide['type'], number[]> = {
   development: [26, 30, 34, 38, 43],
   book: [26, 30, 34, 38, 42],
   final: [28, 33, 38, 43, 48, 54, 60],
+  photoTop: [26, 30, 34, 38, 43],
 }
 
 /** Passo padrão de cada tipo (mantém o tamanho visual de sempre). */
@@ -47,6 +52,7 @@ export const DEFAULT_STEPS: Record<Slide['type'], number> = {
   development: 2,
   book: 2,
   final: 4,
+  photoTop: 2,
 }
 
 export function sizeStepsFor(type: Slide['type']): number {
@@ -71,6 +77,7 @@ const DEFAULT_LINE_HEIGHT: Record<Slide['type'], number> = {
   development: 1.5,
   book: 1.5,
   final: 1.32,
+  photoTop: 1.45,
 }
 
 export function lineHeightFor(slide: Slide): number {
@@ -214,6 +221,9 @@ function EditableText({
   const [editing, setEditing] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const clickPoint = useRef<{ x: number; y: number } | null>(null)
+  // Acentos (´ + a = á) chegam como composição: mexer no DOM no meio disso
+  // quebra a letra acentuada.
+  const composing = useRef(false)
 
   // Reconstrói o conteúdo e recoloca o cursor. As posições são no texto
   // CRU: é o que distingue "fim do parágrafo 1" de "início do parágrafo 2"
@@ -361,8 +371,23 @@ function EditableText({
     }
   }
 
+  /**
+   * O navegador faz cirurgia própria no conteúdo: digitar por cima de um
+   * trecho formatado gera <b>, <i> e até <span style="font-size:48.6px">
+   * com tamanho fixo em pixel — que não acompanha o tamanho do slide e
+   * suja o texto salvo. Quando aparece algo que não saiu do nosso
+   * renderizador, o conteúdo é redesenhado a partir do texto.
+   */
+  const temLixo = (el: HTMLElement) =>
+    el.querySelector('[style], b, i, font, span:not(.sl-big)') !== null
+
   const handleInput = (el: HTMLElement) => {
-    onChange?.(editorValueOf(el, paragraphs))
+    const val = editorValueOf(el, paragraphs)
+    if (!composing.current && temLixo(el)) {
+      const caret = selRaw(el, val)
+      renderEditor(el, val, caret.start, caret.end)
+    }
+    onChange?.(val)
   }
 
   const insertRaw = (el: HTMLElement, inserted: string) => {
@@ -460,6 +485,29 @@ function EditableText({
           role="textbox"
           aria-multiline="true"
           onInput={(e) => handleInput(e.currentTarget)}
+          onBeforeInput={(e) => {
+            // Digitar por cima de uma seleção é onde o navegador herda
+            // formatação e inventa tags: nesse caso a troca é feita no
+            // texto, e o conteúdo redesenhado do nosso jeito.
+            const sel = window.getSelection()
+            const ev = e.nativeEvent as InputEvent
+            if (
+              ev.inputType === 'insertText' &&
+              typeof ev.data === 'string' &&
+              sel &&
+              !sel.isCollapsed
+            ) {
+              e.preventDefault()
+              insertRaw(e.currentTarget, ev.data)
+            }
+          }}
+          onCompositionStart={() => {
+            composing.current = true
+          }}
+          onCompositionEnd={(e) => {
+            composing.current = false
+            handleInput(e.currentTarget)
+          }}
           onBlur={() => setEditing(false)}
           onPaste={(e) => {
             e.preventDefault()
@@ -794,6 +842,52 @@ function FinalLayers({
   )
 }
 
+/** Foto deitada em cima, bloco preto embaixo: título forte + parágrafos. */
+function PhotoTopLayers({
+  slide,
+  media,
+  mode,
+  still,
+  onTextEdit,
+}: {
+  slide: PhotoTopSlide
+  media: SlideMedia | null
+  mode: RenderMode
+  still: boolean
+  onTextEdit?: (field: EditField, value: string) => void
+}) {
+  const textStyle = slideTextStyle(slide)
+  return (
+    <>
+      <div className="sl-pt-media">
+        {media && mode !== 'overlay' && (
+          <MediaEl media={media} className="sl-media-fill" still={still} />
+        )}
+        {!media && mode === 'full' && (
+          <div className="sl-pt-media-empty">
+            <span>Foto deitada aqui em cima</span>
+          </div>
+        )}
+      </div>
+      <div className="sl-pt-text" style={textStyle}>
+        <EditableText
+          value={slide.title}
+          onChange={onTextEdit && ((v) => onTextEdit('title', v))}
+          className="sl-pt-title"
+          placeholder="Clique e escreva a frase de abertura…"
+        />
+        <EditableText
+          value={slide.body}
+          onChange={onTextEdit && ((v) => onTextEdit('body', v))}
+          className="sl-pt-body"
+          paragraphs
+          placeholder="Clique e escreva o texto…"
+        />
+      </div>
+    </>
+  )
+}
+
 export function SlideRenderer({
   slide,
   project,
@@ -845,6 +939,17 @@ export function SlideRenderer({
           media={media}
           mode={mode}
           onEdit={onTextEdit && ((v) => onTextEdit('body', v))}
+        />
+      )
+      break
+    case 'photoTop':
+      layers = (
+        <PhotoTopLayers
+          slide={slide}
+          media={media}
+          mode={mode}
+          still={thumbnail}
+          onTextEdit={onTextEdit}
         />
       )
       break

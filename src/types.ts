@@ -12,7 +12,13 @@ export interface SlideMedia {
   zoom?: number
 }
 
-export type SlideType = 'split' | 'comparison' | 'development' | 'book' | 'final'
+export type SlideType =
+  | 'split'
+  | 'comparison'
+  | 'development'
+  | 'book'
+  | 'final'
+  | 'photoTop'
 
 interface BaseSlide {
   id: string
@@ -69,12 +75,22 @@ export interface FinalSlide extends BaseSlide {
   text: string
 }
 
+/** Foto deitada em cima + bloco preto embaixo com título e parágrafos. */
+export interface PhotoTopSlide extends BaseSlide {
+  type: 'photoTop'
+  media: SlideMedia | null
+  /** Frase de abertura, em negrito e maior que o corpo. */
+  title: string
+  body: string
+}
+
 export type Slide =
   | SplitSlide
   | ComparisonSlide
   | DevelopmentSlide
   | BookSlide
   | FinalSlide
+  | PhotoTopSlide
 
 /** Fonte dos slides: serifada (STIX), sem serifa (Helvetica) ou a da pessoa. */
 export type FontStyle = 'serif' | 'sans' | 'custom'

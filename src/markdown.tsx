@@ -65,13 +65,93 @@ export function renderParagraphs(text: string): ReactNode {
 /** Separador de parágrafo — o mesmo critério do renderParagraphs. */
 export const PARA_RE = /(\n\s*\n)/
 
-function tokenOf(part: string): { m: number; inner: string } | null {
-  if (/^\*\*\*[^*]+\*\*\*$/.test(part)) return { m: 3, inner: part.slice(3, -3) }
-  if (/^\*\*[^*]+\*\*$/.test(part)) return { m: 2, inner: part.slice(2, -2) }
-  if (/^==[^=]+==$/.test(part)) return { m: 2, inner: part.slice(2, -2) }
-  if (/^\*[^*]+\*$/.test(part)) return { m: 1, inner: part.slice(1, -1) }
-  if (/^_[^_]+_$/.test(part)) return { m: 1, inner: part.slice(1, -1) }
+// Cada formato é um bit: uma letra pode carregar todos ao mesmo tempo.
+export const BIG = 1
+export const UND = 2
+export const BOLD = 4
+export const ITAL = 8
+
+/** Ordem de escrita, de fora pra dentro: ==_***texto***_== */
+const NESTING: [number, string][] = [
+  [BIG, '=='],
+  [UND, '_'],
+  [BOLD, '**'],
+  [ITAL, '*'],
+]
+
+const BIT_OF: Record<string, number> = {
+  '==': BIG,
+  _: UND,
+  '**': BOLD,
+  '*': ITAL,
+}
+
+function tokenOf(part: string): { m: number; inner: string; bit: number } | null {
+  if (/^\*\*\*[^*]+\*\*\*$/.test(part))
+    return { m: 3, inner: part.slice(3, -3), bit: BOLD | ITAL }
+  if (/^\*\*[^*]+\*\*$/.test(part))
+    return { m: 2, inner: part.slice(2, -2), bit: BOLD }
+  if (/^==[^=]+==$/.test(part)) return { m: 2, inner: part.slice(2, -2), bit: BIG }
+  if (/^\*[^*]+\*$/.test(part)) return { m: 1, inner: part.slice(1, -1), bit: ITAL }
+  if (/^_[^_]+_$/.test(part)) return { m: 1, inner: part.slice(1, -1), bit: UND }
   return null
+}
+
+/**
+ * Desmonta UMA linha em letras + os formatos de cada letra. É o modelo que
+ * torna qualquer combinação possível: negrito, itálico, sublinhado e frase
+ * maior convivem porque viram bits na mesma letra, em vez de marcadores
+ * que precisam se aninhar direitinho no texto.
+ */
+export function parseLine(raw: string): {
+  text: string
+  marks: number[]
+  visOf: number[]
+} {
+  const text: string[] = []
+  const marks: number[] = []
+  const visOf = new Array<number>(raw.length + 1).fill(0)
+  const walk = (str: string, base: number, active: number) => {
+    let p = base
+    for (const part of str.split(TOKEN_RE)) {
+      if (!part) continue
+      const t = tokenOf(part)
+      if (t) {
+        for (let k = 0; k < t.m; k++) visOf[p + k] = text.length
+        walk(t.inner, p + t.m, active | t.bit)
+        for (let k = 0; k < t.m; k++) visOf[p + part.length - t.m + k] = text.length
+      } else {
+        for (let k = 0; k < part.length; k++) {
+          visOf[p + k] = text.length
+          text.push(part[k])
+          marks.push(active)
+        }
+      }
+      p += part.length
+    }
+  }
+  walk(raw, 0, 0)
+  visOf[raw.length] = text.length
+  return { text: text.join(''), marks, visOf }
+}
+
+/** Remonta a linha a partir das letras e seus formatos, sempre na mesma
+ *  ordem de aninhamento — nunca sobra marcador solto no texto. */
+export function serializeLine(text: string, marks: number[]): string {
+  let out = ''
+  let aberto = 0
+  for (let i = 0; i <= text.length; i++) {
+    const atual = i < text.length ? marks[i] : 0
+    if (atual !== aberto) {
+      for (let k = NESTING.length - 1; k >= 0; k--) {
+        if (aberto & NESTING[k][0]) out += NESTING[k][1]
+      }
+      for (const [bit, mk] of NESTING) if (atual & bit) out += mk
+      aberto = atual
+    }
+    if (i < text.length) out += text[i]
+  }
+  return out
 }
 
 /** Conteúdo de UMA linha/bloco do editor: formatado, sem marcadores. */
@@ -182,12 +262,31 @@ export function editorValueOf(root: HTMLElement, paragraphs: boolean): string {
       } else {
         const inner = mdOf(n)
         if (inner === '') continue
-        const name = n.nodeName
-        if (name === 'STRONG' || name === 'B') out += `**${inner}**`
-        else if (name === 'EM' || name === 'I') out += `*${inner}*`
-        else if (name === 'U') out += `_${inner}_`
-        else if ((n as HTMLElement).classList?.contains('sl-big')) out += `==${inner}==`
-        else out += inner
+        // O navegador nem sempre devolve <strong>/<em>: digitando por cima
+        // de um trecho formatado ele às vezes cria <b>, <i> ou um <span>
+        // com estilo. Todos precisam virar marcador, senão a formatação
+        // some sozinha ao editar.
+        const el = n as HTMLElement
+        const nome = n.nodeName
+        const estilo = el.style
+        const peso = estilo?.fontWeight ?? ''
+        let bits = 0
+        if (nome === 'STRONG' || nome === 'B' || peso === 'bold' || +peso >= 600) {
+          bits |= BOLD
+        }
+        if (nome === 'EM' || nome === 'I' || estilo?.fontStyle === 'italic') {
+          bits |= ITAL
+        }
+        if (nome === 'U' || estilo?.textDecorationLine?.includes('underline')) {
+          bits |= UND
+        }
+        if (el.classList?.contains('sl-big')) bits |= BIG
+        let env = inner
+        for (let k = NESTING.length - 1; k >= 0; k--) {
+          const [bit, mk] = NESTING[k]
+          if (bits & bit) env = mk + env + mk
+        }
+        out += env
       }
     }
     return out
@@ -211,10 +310,38 @@ export function editorValueOf(root: HTMLElement, paragraphs: boolean): string {
   return blocks.join('\n\n')
 }
 
+// ===== Aplicar/remover formatação numa seleção =====
+
+const isWord = (ch: string | undefined) =>
+  ch !== undefined && /[\p{L}\p{N}_]/u.test(ch)
+
+/** Apara espaços das bordas e completa palavra cortada no meio — inclusive
+ *  quando é só o cursor piscando dentro dela. Tudo em letras visíveis. */
+function expandVis(text: string, a: number, b: number): [number, number] {
+  let s = Math.max(0, Math.min(a, text.length))
+  let e = Math.max(0, Math.min(b, text.length))
+  while (s < e && /\s/.test(text[s])) s++
+  while (e > s && /\s/.test(text[e - 1])) e--
+  while (s > 0 && isWord(text[s - 1]) && isWord(text[s])) s--
+  while (e < text.length && isWord(text[e - 1]) && isWord(text[e])) e++
+  return [s, e]
+}
+
+/** Primeira posição no texto cru que cai na letra visível pedida. */
+function visToRaw(visOf: number[], vis: number): number {
+  for (let r = 0; r < visOf.length; r++) if (visOf[r] === vis) return r
+  return visOf.length - 1
+}
+
 /**
- * Aplica/remove um marcador de formatação numa seleção de texto, aparando
- * espaços das bordas e expandindo seleção que parou no meio de palavra.
- * Compartilhado pelos atalhos Ctrl+B/I/U/E do editor.
+ * Liga/desliga um formato na seleção — usado pelos botões N/I/S/Frase
+ * maior e pelos atalhos Ctrl+B/I/U e Cmd+M.
+ *
+ * Trabalha linha a linha porque marcador não atravessa quebra de
+ * parágrafo: um "**" aberto num parágrafo e fechado no seguinte não é
+ * formatação nenhuma — os asteriscos apareceriam escritos no slide.
+ * Selecionar o texto inteiro e clicar em Negrito formata cada parágrafo
+ * por dentro, e é isso que deixa aplicar tudo de uma vez.
  */
 export function applyMarker(
   value: string,
@@ -222,82 +349,65 @@ export function applyMarker(
   selEnd: number,
   marker: string,
 ): { value: string; start: number; end: number } {
-  const isWord = (ch: string | undefined) =>
-    ch !== undefined && /[\p{L}\p{N}_]/u.test(ch)
-  let s = selStart
-  let e = selEnd
-  while (s < e && /\s/.test(value[s])) s++
-  while (e > s && /\s/.test(value[e - 1])) e--
-  while (s > 0 && isWord(value[s - 1]) && isWord(value[s])) s--
-  while (e < value.length && isWord(value[e - 1]) && isWord(value[e])) e++
-  // Nada selecionado e sem palavra em volta: não tem o que formatar.
-  if (s === e) return { value, start: selStart, end: selEnd }
+  const bit = BIT_OF[marker]
+  if (!bit) return { value, start: selStart, end: selEnd }
+  const lo = Math.min(selStart, selEnd)
+  const hi = Math.max(selStart, selEnd)
 
-  const sel = value.slice(s, e)
-  const before = value.slice(0, s)
-  const after = value.slice(e)
-  const m = marker.length
-
-  const leadRun = (str: string) => {
-    let i = 0
-    while (i < str.length && '*_='.includes(str[i])) i++
-    return str.slice(0, i)
-  }
-  const tailRun = (str: string) => {
-    let i = str.length
-    while (i > 0 && '*_='.includes(str[i - 1])) i--
-    return str.slice(i)
-  }
-  const stars = (str: string) => (str.match(/\*/g) ?? []).length
-
-  // Seleção inclui os próprios marcadores (ex.: selecionou "**palavra**"
-  // inteiro): tira só esse marcador. O teste de paridade impede confundir
-  // o "*" do itálico com o "**" do negrito.
-  const selWrapped =
-    sel.length >= 2 * m && sel.startsWith(marker) && sel.endsWith(marker)
-  const selStarsOk =
-    marker !== '*' ||
-    (stars(leadRun(sel)) % 2 === 1 && stars(tailRun(sel)) % 2 === 1)
-  if (selWrapped && selStarsOk) {
-    return { value: before + sel.slice(m, -m) + after, start: s, end: e - 2 * m }
+  const linhas: { raw: string; ini: number }[] = []
+  let pos = 0
+  for (const raw of value.split('\n')) {
+    linhas.push({ raw, ini: pos })
+    pos += raw.length + 1
   }
 
-  // Os marcadores colados na seleção pelos dois lados dizem quais formatos
-  // já estão ativos. O clique alterna o formato pedido e o conjunto inteiro
-  // é reescrito em ordem fixa (frase maior › sublinhado › negrito › itálico)
-  // — é isso que deixa empilhar tudo junto sem os asteriscos se embolarem.
-  const runB = tailRun(before)
-  const runA = leadRun(after)
-  const flags = {
-    big: runB.includes('==') && runA.includes('=='),
-    und: runB.includes('_') && runA.includes('_'),
-    bold: stars(runB) >= 2 && stars(runA) >= 2,
-    ital: stars(runB) % 2 === 1 && stars(runA) % 2 === 1,
+  const alvos: { i: number; p: ReturnType<typeof parseLine>; a: number; b: number }[] =
+    []
+  for (let i = 0; i < linhas.length; i++) {
+    const { raw, ini } = linhas[i]
+    if (ini + raw.length < lo || ini > hi) continue
+    const p = parseLine(raw)
+    const [a, b] = expandVis(
+      p.text,
+      p.visOf[Math.max(lo - ini, 0)] ?? 0,
+      p.visOf[Math.min(hi - ini, raw.length)] ?? p.text.length,
+    )
+    if (a < b) alvos.push({ i, p, a, b })
   }
-  const flagOf: Record<string, keyof typeof flags> = {
-    '==': 'big',
-    _: 'und',
-    '**': 'bold',
-    '*': 'ital',
-  }
-  flags[flagOf[marker]] = !flags[flagOf[marker]]
+  // Só espaço selecionado (ou nada): não tem o que formatar.
+  if (alvos.length === 0) return { value, start: selStart, end: selEnd }
 
-  let wrapped = sel
-  for (const [flag, mk] of [
-    ['ital', '*'],
-    ['bold', '**'],
-    ['und', '_'],
-    ['big', '=='],
-  ] as const) {
-    if (flags[flag]) wrapped = mk + wrapped + mk
+  // Decisão única pro conjunto: se TUDO já tem o formato, o clique tira de
+  // tudo; senão põe em tudo. Sem isso, uma seleção meio formatada ficaria
+  // alternando pedaço sim, pedaço não.
+  const ligar = !alvos.every(({ p, a, b }) => {
+    for (let k = a; k < b; k++) if (!(p.marks[k] & bit)) return false
+    return true
+  })
+
+  for (const { i, p, a, b } of alvos) {
+    for (let k = a; k < b; k++) {
+      p.marks[k] = ligar ? p.marks[k] | bit : p.marks[k] & ~bit
+    }
+    linhas[i].raw = serializeLine(p.text, p.marks)
   }
-  const stem = before.slice(0, before.length - runB.length)
-  const stemAfter = after.slice(runA.length)
-  const inner = (wrapped.length - sel.length) / 2
-  const start = stem.length + inner
+
+  const out = linhas.map((l) => l.raw).join('\n')
+  // Posições novas: as letras visíveis não mudaram, só os marcadores em
+  // volta — então é só reabrir as linhas mexidas já reescritas.
+  let ini = 0
+  const inicios = linhas.map((l) => {
+    const v = ini
+    ini += l.raw.length + 1
+    return v
+  })
+  const prim = alvos[0]
+  const ult = alvos[alvos.length - 1]
+  const pPrim = parseLine(linhas[prim.i].raw)
+  const pUlt = parseLine(linhas[ult.i].raw)
   return {
-    value: stem + wrapped + stemAfter,
-    start,
-    end: start + sel.length,
+    value: out,
+    start: inicios[prim.i] + visToRaw(pPrim.visOf, prim.a),
+    end: inicios[ult.i] + visToRaw(pUlt.visOf, ult.b),
   }
 }

@@ -1136,6 +1136,57 @@ body {
   margin-bottom: 0;
 }
 
+/* ===== Foto em cima + bloco preto embaixo (Desenvolvimento 3) ===== */
+
+/* A foto ocupa a faixa de cima inteira, deitada; o resto do slide é o
+   fundo preto do próprio card — nada de sombra por cima do texto. */
+.sl-pt-media {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 660px;
+  overflow: hidden;
+}
+
+.sl-pt-media-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #191919;
+  color: rgba(255, 255, 255, 0.42);
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 30px;
+  letter-spacing: 0.02em;
+}
+
+.sl-pt-text {
+  position: absolute;
+  left: 95px;
+  right: 95px;
+  top: 742px;
+  bottom: 80px;
+  text-align: left;
+  color: #fff;
+}
+
+.sl-pt-title {
+  font-weight: 700;
+  font-size: 1.4em;
+  line-height: 1.18;
+  margin-bottom: 0.62em;
+}
+
+.sl-pt-body p {
+  margin: 0 0 0.85em;
+}
+
+.sl-pt-body p:last-child {
+  margin-bottom: 0;
+}
+
 /* ===== Edição direta no slide + frase maior ===== */
 
 /* ==frase maior== dentro do texto */

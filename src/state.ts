@@ -4,6 +4,7 @@ import type {
   CustomFont,
   DevelopmentSlide,
   FinalSlide,
+  PhotoTopSlide,
   Project,
   Slide,
   SlideMedia,
@@ -86,6 +87,17 @@ export function makeSlide(type: SlideType): Slide {
       }
       return s
     }
+    case 'photoTop': {
+      const s: PhotoTopSlide = {
+        ...base,
+        type,
+        media: null,
+        title: 'A frase de abertura entra aqui, curta e forte.',
+        body:
+          'Embaixo da foto o texto respira: o fundo preto garante leitura sem precisar de sombra nenhuma. Escreva em parágrafos curtos, de duas ou três linhas.\n\nA foto deitada em cima funciona melhor com imagem panorâmica ou duas cenas lado a lado — é o formato que puxa o olho antes da leitura.',
+      }
+      return s
+    }
     case 'final': {
       const s: FinalSlide = {
         ...base,
@@ -131,6 +143,11 @@ export function defaultProject(): Project {
   dev1.body =
     'Aqui entra o desenvolvimento: você conecta os dados que mostrou e explica o que eles significam juntos. Parágrafos curtos, de duas ou três linhas — a pessoa lê no celular, com o dedo pronto pra deslizar.\n\nColoque uma foto de fundo neste slide: a sombra escura garante a leitura por cima dela.\n\n**A conclusão forte fecha em negrito.**'
 
+  const foto1 = makeSlide('photoTop') as PhotoTopSlide
+  foto1.title = 'O insumo mais caro é *tempo*.'
+  foto1.body =
+    'O Desenvolvimento 3 é este: foto deitada em cima, bloco preto embaixo. Serve pra quando a imagem precisa aparecer inteira, sem texto por cima dela.\n\nUse a frase de abertura pra entregar a ideia e os parágrafos pra sustentar. Intercale com os outros tipos: é o revezamento que segura a leitura até o fim.'
+
   const duo1 = makeSlide('final') as FinalSlide
   duo1.text =
     'O Desenvolvimento 2 é o respiro: frase curta à esquerda, foto forte à direita. Intercale com os blocos de texto corrido pra leitura não cansar.'
@@ -142,6 +159,11 @@ export function defaultProject(): Project {
   const duo2 = makeSlide('final') as FinalSlide
   duo2.text =
     'Mais um respiro aqui: quanto mais denso o carrossel, mais esses intervalos importam.'
+
+  const foto2 = makeSlide('photoTop') as PhotoTopSlide
+  foto2.title = 'A imagem entra inteira, sem nada por cima.'
+  foto2.body =
+    'Repita o formato quando tiver uma foto que não pode ser cortada nem escurecida — comparação lado a lado, antes e depois, cena aberta.'
 
   const dev3 = makeSlide('development') as DevelopmentSlide
   dev3.body =
@@ -157,7 +179,9 @@ export function defaultProject(): Project {
     customFont: null,
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
-    slides: [...splits, dev1, duo1, dev2, duo2, dev3, cta],
+    // Depois dos comparativos, os tipos de desenvolvimento se revezam:
+    // texto corrido, foto em cima, respiro com foto ao lado.
+    slides: [...splits, dev1, foto1, duo1, dev2, foto2, duo2, dev3, cta],
   }
 }
 
@@ -452,7 +476,11 @@ export function normalizeProject(data: unknown): Project | null {
   for (const s of p.slides) {
     if (typeof s !== 'object' || s === null) continue
     const sl = s as Slide
-    if (!['split', 'comparison', 'development', 'book', 'final'].includes(sl.type)) {
+    if (
+      !['split', 'comparison', 'development', 'book', 'final', 'photoTop'].includes(
+        sl.type,
+      )
+    ) {
       continue
     }
     const fresh = makeSlide(sl.type)
@@ -512,6 +540,11 @@ export function normalizeProject(data: unknown): Project | null {
       case 'final':
         merged.media = sanitizeMedia(merged.media)
         merged.text = str(merged.text, '')
+        break
+      case 'photoTop':
+        merged.media = sanitizeMedia(merged.media)
+        merged.title = str(merged.title, '')
+        merged.body = str(merged.body, '')
         break
     }
     slides.push(merged)

@@ -45,6 +45,7 @@ const TYPE_LABEL: Record<SlideType, string> = {
   development: 'Desenvolvimento 1',
   book: 'Livro / Oferta',
   final: 'Desenvolvimento 2',
+  photoTop: 'Desenvolvimento 3',
 }
 
 /** Cor de identificação de cada tipo, usada no menu, no selo e nas miniaturas. */
@@ -54,14 +55,16 @@ const TYPE_COLOR: Record<SlideType, string> = {
   development: '#7fb5e0',
   book: '#c79ad2',
   final: '#8fd49a',
+  photoTop: '#e28f9a',
 }
 
-// Os três tipos do formato. Os antigos (foto de fundo, livro) continuam
+// Os quatro tipos do formato. Os antigos (foto de fundo, livro) continuam
 // renderizando em carrosséis já salvos, mas saíram do menu.
 const ADD_OPTIONS: { type: SlideType; label: string; hint: string }[] = [
   { type: 'split', label: 'Tela partida', hint: 'o par de comparação' },
   { type: 'development', label: 'Desenvolvimento 1', hint: 'foto de fundo + texto' },
   { type: 'final', label: 'Desenvolvimento 2', hint: 'texto à esquerda, foto à direita' },
+  { type: 'photoTop', label: 'Desenvolvimento 3', hint: 'foto deitada em cima, texto embaixo' },
 ]
 
 /** Cores das metades da tela partida no painel de ajustes. */
@@ -77,6 +80,17 @@ function TypeIcon({ type }: { type: SlideType }) {
         <rect x="1" y="17" width="24" height="14" rx="2" fill="none" stroke={c} strokeWidth="1.5" />
         <line x1="6" y1="11.5" x2="20" y2="11.5" stroke={c} strokeWidth="1.5" />
         <line x1="6" y1="27.5" x2="20" y2="27.5" stroke={c} strokeWidth="1.5" />
+      </svg>
+    )
+  }
+  if (type === 'photoTop') {
+    return (
+      <svg className="type-icon" viewBox="0 0 26 32" aria-hidden>
+        <rect x="1" y="1" width="24" height="30" rx="2" fill="none" stroke={c} strokeWidth="1.5" />
+        <rect x="2.5" y="2.5" width="21" height="12" fill={c} opacity="0.45" />
+        <line x1="4" y1="20" x2="20" y2="20" stroke={c} strokeWidth="2.2" />
+        <line x1="4" y1="24" x2="22" y2="24" stroke={c} strokeWidth="1.5" />
+        <line x1="4" y1="28" x2="17" y2="28" stroke={c} strokeWidth="1.5" />
       </svg>
     )
   }
@@ -456,16 +470,14 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
-      if (
-        target &&
-        (target.tagName === 'TEXTAREA' ||
-          target.tagName === 'INPUT' ||
-          target.isContentEditable)
-      ) {
-        return // dentro dos campos vale o desfazer nativo do navegador
+      if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
+        return // nos campos comuns vale o desfazer nativo do navegador
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault()
+        // Editando na arte: sai da edição antes, senão o texto na tela
+        // continuaria o de agora enquanto o projeto voltou pro anterior.
+        if (target?.isContentEditable) target.blur()
         undo()
       }
     }
@@ -1450,9 +1462,14 @@ export default function App() {
                         }
                         if (
                           field === 'body' &&
-                          (s.type === 'development' || s.type === 'book')
+                          (s.type === 'development' ||
+                            s.type === 'book' ||
+                            s.type === 'photoTop')
                         ) {
                           return { ...s, body: v }
+                        }
+                        if (field === 'title' && s.type === 'photoTop') {
+                          return { ...s, title: v }
                         }
                         if (field === 'text' && 'text' in s) {
                           return { ...s, text: v } as Slide
@@ -1501,7 +1518,9 @@ export default function App() {
                       ? 'Imagem'
                       : selected.type === 'development'
                         ? 'Foto ou vídeo de fundo'
-                        : 'Foto ou vídeo'}
+                        : selected.type === 'photoTop'
+                          ? 'Foto deitada de cima'
+                          : 'Foto ou vídeo'}
                   </h2>
                   <div className="control-row control-row--wrap">
                     <FileButton
