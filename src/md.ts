@@ -36,9 +36,13 @@ const semAcento = (t: string) =>
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
 
-/** Seções que existem no roteiro mas não são slides. */
+/**
+ * Seções que existem no roteiro mas não são slides: legenda do post,
+ * notas de produção, checagem, arsenal de dados. Casa por PREFIXO — sem
+ * borda de palavra, senão "observ" não pega "observações".
+ */
 const SECAO_IGNORADA =
-  /^(legenda|nota|notas|observ|refer|fonte|fontes|checklist|status|estrutura|briefing|copy do post)\b|nao publicar/
+  /^(legenda|nota|observ|refer|fonte|checa|checklist|status|estrutura|briefing|arsenal|apendice|anexo|producao|credito|copy do post)|nao publicar/
 
 /**
  * LAYOUT escrito no título ("SLIDE 5 (desenvolvimento 1)", "(em pé)").
@@ -113,11 +117,29 @@ const PALAVRAS_B =
   /^(baixo|embaixo|abaixo|direita|lado b|lado direito|coluna da direita|depois|segundo|b)$/
 
 /**
+ * Linha que só descreve a arte ("Imagem: retrato de…", "Foto: montagem
+ * com…"). É instrução pro quem monta o slide, nunca texto publicado.
+ */
+const LINHA_DE_ARTE =
+  /^\s*[*_>#\s-]*(imagem|imagens|foto|fotos|video|arte|montagem|retrato|print|frame|thumb|captura|ilustracao|gif|referencia visual)\s*[:\-–—]/
+
+/** O que vem depois do rótulo descreve foto, não é o texto do slide. */
+const COMECA_COM_ARTE =
+  /^(foto|imagem|video|montagem|retrato|print|frame|arte|thumb|captura|ilustracao|gif|cena|close|plano)\b/
+
+/**
  * Reconhece a linha que só diz ONDE o texto vai — "Texto de cima:",
  * "**Baixo:**", "Esquerda:", "Lado A —". Ela é orientação, não conteúdo:
  * some do slide e manda o que vem depois pra metade certa.
  */
 function rotuloDaLinha(linha: string): { lado: 'a' | 'b'; resto: string } | null {
+  const bruta = semAcento(linha)
+  // "Cima: foto X · Baixo: foto Y" fala das DUAS metades na mesma linha:
+  // é a orientação de imagem do roteiro, não o texto de nenhuma delas.
+  const citaA = /\b(cima|topo|esquerda|lado a)\b\s*[:\-–—]/.test(bruta)
+  const citaB = /\b(baixo|embaixo|direita|lado b)\b\s*[:\-–—]/.test(bruta)
+  if (citaA && citaB) return null
+
   const t = linha.trim().replace(/^[-*+>\s]+/, '')
   if (t === '') return null
   const m = /^(.{1,42}?)\s*[:\-–—]\s*(.*)$/.exec(t)
@@ -128,6 +150,8 @@ function rotuloDaLinha(linha: string): { lado: 'a' | 'b'; resto: string } | null
     .replace(/^(frase|bloco|parte)\s+(de|da|do)\s+/, '')
     .trim()
   const resto = m[2].trim().replace(/^\*+/, '').replace(/\*+$/, '').trim()
+  // "Cima: foto do estádio" descreve a arte daquela metade, não o texto
+  if (COMECA_COM_ARTE.test(semAcento(resto))) return null
   if (PALAVRAS_A.test(alvo)) return { lado: 'a', resto }
   if (PALAVRAS_B.test(alvo)) return { lado: 'b', resto }
   return null
@@ -193,8 +217,8 @@ function partesDoSlide(linhas: string[]): { partes: Parte[]; comBloco: boolean }
       soltas.push({ lado: r.lado, linhas: r.resto ? [limpaTexto(r.resto)] : [] })
       continue
     }
-    // régua entre slides não é conteúdo
-    if (eRegua(bruta)) continue
+    // régua entre slides e descrição de arte não são conteúdo
+    if (eRegua(bruta) || LINHA_DE_ARTE.test(semAcento(bruta))) continue
     soltas[soltas.length - 1].linhas.push(limpaLinhaSolta(bruta))
   }
   if (dentro) {
@@ -233,13 +257,24 @@ function metades(partes: Parte[], linhas: string[]): [string, string] | null {
 }
 
 /** Sem tipo escrito, o formato do conteúdo entrega qual é. */
-function deduzTipo(partes: Parte[], linhas: string[]): { type: SlideType } {
+function deduzTipo(
+  partes: Parte[],
+  linhas: string[],
+  comBloco: boolean,
+): { type: SlideType } {
   const temRotulo = partes.some((p) => p.lado !== null)
   if (temRotulo) return { type: 'split' }
   if (partes.length === 2 && partes.every((p) => p.texto.length <= 220)) {
     return { type: 'split' }
   }
-  if (partes.length === 1 && linhas.some(eRegua) && partes[0].texto.length <= 440) {
+  // Com blocos de código, a tela partida se anuncia por DOIS blocos ou por
+  // rótulo. Um bloco só com dois parágrafos é texto corrido, não comparativo.
+  if (
+    !comBloco &&
+    partes.length === 1 &&
+    linhas.some(eRegua) &&
+    partes[0].texto.length <= 440
+  ) {
     const m = metades(partes, linhas)
     if (m) return { type: 'split' }
   }
@@ -416,7 +451,7 @@ export function lerMarkdown(
       return
     }
     const rotulo = bloco.titulo.trim() || `Slide ${i + 1}`
-    const { partes } = partesDoSlide(bloco.linhas)
+    const { partes, comBloco } = partesDoSlide(bloco.linhas)
     if (partes.length === 0) return
     // Ordem de decisão, da mais forte pra mais fraca:
     //   1. o layout escrito no título      (é a arte, não tem o que discutir)
@@ -430,7 +465,7 @@ export function lerMarkdown(
       layout ??
       (doRitmo ? { type: doRitmo } : null) ??
       funcao ??
-      deduzTipo(partes, bloco.linhas)
+      deduzTipo(partes, bloco.linhas, comBloco)
     if (!layout && !doRitmo && !funcao) {
       const nomes: Record<SlideType, string> = {
         split: 'tela partida',
@@ -453,64 +488,56 @@ export function lerMarkdown(
   return { titulo: titulo.trim(), slides, captionLeft, captionRight, avisos }
 }
 
-/** Arquivo de exemplo, pra quem abrir o botão saber o que escrever. */
-export const MODELO_MD = `# Nome do carrossel
+/** Arquivo de exemplo, no formato padrão dos roteiros. */
+export const MODELO_MD = `# NOME DO CARROSSEL · o subtítulo dele
+**Cliente:** Nome do cliente · **Data:** 07/08/2026
 
-Assinatura esquerda: SUA ASSINATURA | DA SÉRIE
-Assinatura direita: BRANDING, ESTRATÉGIA | E DIREÇÃO CRIATIVA
+---
 
-## SLIDE 1 (comparativo)
+## SLIDE 1 · Tela Partida
+**Cima:** descreva aqui a foto de cima · **Baixo:** descreva aqui a foto de baixo
 
-**Texto de cima:**
 \`\`\`
-O dado mais forte que você tem, curto e verificável.
+O texto que vai na metade de cima.
 \`\`\`
 
-**Texto de baixo:**
 \`\`\`
-O contraste que faz a percepção virar.
+O texto que vai na metade de baixo.
 \`\`\`
 
 ---
 
-## SLIDE 2 (comparativo em pé)
-
-**Texto de cima:**
-\`\`\`
-A primeira imagem da comparação, à esquerda.
-\`\`\`
-
-**Texto de baixo:**
-\`\`\`
-A segunda, à direita.
-\`\`\`
-
----
-
-## SLIDE 3 (desenvolvimento)
+## SLIDE 2 · Tela Partida
+**Cima:** foto da esquerda · **Baixo:** foto da direita
 
 \`\`\`
-O texto corrido entra aqui, em parágrafos curtos de duas ou três linhas.
+Segundo par, metade de cima.
+\`\`\`
 
-Linha em branco separa parágrafos. Use **negrito**, *itálico* e ==frase maior== à vontade.
+\`\`\`
+Segundo par, metade de baixo.
 \`\`\`
 
 ---
 
-## SLIDE 4 (desenvolvimento 3)
+## SLIDE 3
+**Imagem:** descreva aqui a foto deste slide
 
 \`\`\`
-A frase de abertura, curta e forte.
+**A abertura em negrito puxa o olho.**
 
-O corpo do texto vem depois dela, embaixo da foto deitada.
+O corpo vem depois, em parágrafos curtos de duas ou três linhas. Linha em branco separa parágrafo. Use **negrito**, *itálico* e ==frase maior== à vontade.
 \`\`\`
 
 ---
 
-## SLIDE 5 (CTA)
+## SLIDE 4 · CTA
+**Imagem:** foto do cliente olhando pra câmera
 
 \`\`\`
-Me segue se você acha que este assunto merece mais atenção do que vem recebendo.
+A chamada curta vem aqui.
+
+Me segue que eu falo disso todo dia.
 \`\`\`
 
 ---
@@ -518,13 +545,36 @@ Me segue se você acha que este assunto merece mais atenção do que vem receben
 ## LEGENDA
 
 \`\`\`
-Esta seção não vira slide: o leitor sabe que legenda e notas de produção
-são orientação, não texto do carrossel.
+O texto da legenda do post. Esta seção não vira slide.
 \`\`\`
 
 ---
 
-## NOTAS DE PRODUÇÃO (não publicar)
+## OBSERVAÇÕES DE PRODUÇÃO
 
-**Estrutura:** o que está aqui embaixo também fica de fora do carrossel.
+Nada daqui pra baixo entra no carrossel: notas, checagem e arsenal de
+dados são orientação de produção.
+
+---
+
+## CHECAGEM
+- conferir dado x na fonte y
+
+---
+
+## ARSENAL DE DADOS
+
+Pilar 1: a fonte de cada número.
 `
+
+/*
+ * Como o leitor entende o formato:
+ *
+ *   "## SLIDE 1"                cada título desses abre um slide
+ *   "· Tela Partida", "· CTA"   o tipo, quando você quiser mandar nele
+ *   "**Cima:** … **Baixo:** …"  descrição das FOTOS, não entra no slide
+ *   "**Imagem:** …"             idem, some do texto
+ *   blocos de código            é o que vai publicado, e só isso
+ *   dois blocos numa partida    o primeiro é a metade de cima
+ *   LEGENDA, NOTAS, CHECAGEM…   ficam de fora, e o app avisa quais
+ */
