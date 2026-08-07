@@ -40,8 +40,8 @@ Dois caminhos:
 ```
 
 Tudo é opcional: o que faltar fica no padrão da casa. `sizeStep` conta de 0
-(menor) até o máximo do tipo; `lineHeight` vai de 1.15 a 1.6;
-`letterSpacing` de -0.03 a 0.06 em em.
+(menor) até o máximo do tipo; `lineHeight` vai de 1.0 a 1.6;
+`letterSpacing` de -0.06 a 0.06 em em.
 
 ## Regra de precedência
 

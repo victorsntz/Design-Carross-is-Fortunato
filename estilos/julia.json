@@ -1,0 +1,60 @@
+{
+  "font": "sans",
+  "customFont": null,
+  "weight": "normal",
+  "captionLeft": "JULIA LAZARI\n@JULIA.LAZARI",
+  "captionRight": "NÃO VENDO CURSO NEM\nMENTORIA | FAÇO PRA VOCÊ",
+  "palette": {
+    "bg": "#1a1a1a",
+    "text": "#ffffff",
+    "caption": "#ffffff"
+  },
+  "divider": {
+    "color": "#edece9",
+    "size": 13
+  },
+  "sequencia": [
+    "split",
+    "split",
+    "split",
+    "final",
+    "development",
+    "photoTop",
+    "final",
+    "development",
+    "photoTop",
+    "development"
+  ],
+  "tipos": {
+    "split": {
+      "sizeStep": 7,
+      "lineHeight": 1.0,
+      "letterSpacing": -0.01,
+      "align": "center"
+    },
+    "comparison": {
+      "sizeStep": 4,
+      "lineHeight": 1.0,
+      "letterSpacing": -0.01,
+      "align": "center"
+    },
+    "development": {
+      "sizeStep": 4,
+      "lineHeight": 1.02,
+      "letterSpacing": -0.04,
+      "align": "left"
+    },
+    "final": {
+      "sizeStep": 2,
+      "lineHeight": 1.08,
+      "letterSpacing": 0,
+      "align": "left"
+    },
+    "photoTop": {
+      "sizeStep": 3,
+      "lineHeight": 1.11,
+      "letterSpacing": 0,
+      "align": "left"
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "font": "sans",
+  "customFont": null,
+  "weight": "normal",
+  "captionLeft": "KELVIN CLETO\n@EUSOUKELVINCLETO",
+  "captionRight": "CONSTRUINDO A PRÓXIMA\nGERAÇÃO DE NEGÓCIOS COM IA",
+  "palette": {
+    "bg": "#000921",
+    "text": "#ffffff",
+    "caption": "#ffffff"
+  },
+  "divider": {
+    "color": "#0238bf",
+    "size": 13
+  },
+  "sequencia": [
+    "split",
+    "split",
+    "split",
+    "final",
+    "development",
+    "photoTop",
+    "final",
+    "development",
+    "photoTop",
+    "development"
+  ],
+  "tipos": {
+    "split": {
+      "sizeStep": 7,
+      "lineHeight": 1.0,
+      "letterSpacing": -0.06,
+      "align": "center"
+    },
+    "comparison": {
+      "sizeStep": 4,
+      "lineHeight": 1.0,
+      "letterSpacing": -0.06,
+      "align": "center"
+    },
+    "development": {
+      "sizeStep": 3,
+      "lineHeight": 1.16,
+      "letterSpacing": -0.06,
+      "align": "left"
+    },
+    "final": {
+      "sizeStep": 1,
+      "lineHeight": 1.24,
+      "letterSpacing": -0.035,
+      "align": "left"
+    },
+    "photoTop": {
+      "sizeStep": 3,
+      "lineHeight": 1.16,
+      "letterSpacing": -0.01,
+      "align": "left"
+    }
+  }
+}
