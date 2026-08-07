@@ -22,15 +22,19 @@ const DB_STORE = 'projetos'
 // Resumos ficam num store separado: listar carrosséis não pode pagar o preço
 // de desserializar todas as fotos de todos os projetos.
 const DB_META = 'resumos'
-const DB_VERSION = 2
+const DB_STYLE = 'estilos'
+const DB_VERSION = 3
 
-function openDb(): Promise<IDBDatabase> {
+export const STORE_ESTILOS = DB_STYLE
+
+export function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = () => {
       const db = req.result
       if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE)
       if (!db.objectStoreNames.contains(DB_META)) db.createObjectStore(DB_META)
+      if (!db.objectStoreNames.contains(DB_STYLE)) db.createObjectStore(DB_STYLE)
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
@@ -226,7 +230,7 @@ interface StoredRecord {
 const CURRENT_KEY = '__carrossel-atual'
 const LEGACY_DB_KEY = 'atual'
 
-function txDone(tx: IDBTransaction): Promise<void> {
+export function txDone(tx: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error)
@@ -234,7 +238,7 @@ function txDone(tx: IDBTransaction): Promise<void> {
   })
 }
 
-function reqResult<T>(req: IDBRequest<T>): Promise<T> {
+export function reqResult<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)

@@ -32,6 +32,16 @@ import {
   type ProjectSummary,
 } from './state'
 import { clipboardToMedia, fileToMedia } from './media'
+import { lerMarkdown, MODELO_MD } from './md'
+import { usuarioLogado } from './Gate'
+import {
+  aplicarEstilo,
+  estiloAtual,
+  estiloDoProjeto,
+  normalizarEstilo,
+  salvarEstilo,
+  type EstiloUsuario,
+} from './estilo'
 import {
   downloadBlob,
   exportAllPngZip,
@@ -432,6 +442,12 @@ export default function App() {
   const [project, setProjectRaw] = useState<Project>(defaultProject)
   const [projectId, setProjectId] = useState<string>(() => newId())
   const [saved, setSaved] = useState<ProjectSummary[]>([])
+  // Padrão estético de quem está logado: vale pros carrosséis novos e pra
+  // tudo que entra por importação.
+  const usuario = usuarioLogado()
+  const [estilo, setEstilo] = useState<EstiloUsuario | null>(null)
+  const estiloRef = useRef<EstiloUsuario | null>(null)
+  estiloRef.current = estilo
   const [selectedId, setSelectedId] = useState<string>(() => project.slides[0]?.id ?? '')
   const [busy, setBusy] = useState<string | null>(null)
   const [draftFailed, setDraftFailed] = useState(false)
@@ -522,6 +538,11 @@ export default function App() {
   useEffect(() => {
     void navigator.storage?.persist?.().catch(() => {})
   }, [])
+
+  // Padrão estético de quem entrou: o salvo aqui vence o publicado no site.
+  useEffect(() => {
+    void estiloAtual(usuario).then(setEstilo)
+  }, [usuario])
 
   // Registra a fonte da pessoa num <style> com @font-face: assim ela vale no
   // editor E é embarcada na exportação dos PNGs.
@@ -1126,7 +1147,97 @@ export default function App() {
     p.captionRight = projectRef.current.captionRight
     p.font = projectRef.current.font
     p.customFont = projectRef.current.customFont
-    return p
+    // Com padrão salvo, o carrossel novo já nasce com a cara da pessoa.
+    const e = estiloRef.current
+    return e ? aplicarEstilo(p, e) : p
+  }
+
+  /** Guarda o carrossel aberto como padrão estético desta pessoa. */
+  async function salvarPadrao() {
+    const novo = estiloDoProjeto(projectRef.current)
+    const ok = await salvarEstilo(usuario, novo)
+    if (!ok) {
+      window.alert('Não consegui salvar o padrão neste navegador.')
+      return
+    }
+    setEstilo(novo)
+    window.alert(
+      `Pronto: fonte, assinaturas e ajustes de texto deste carrossel viraram o padrão de "${usuario}". ` +
+        'Todo carrossel novo — e todo .md importado — já nasce assim.',
+    )
+  }
+
+  /** Veste o carrossel aberto com o padrão salvo. */
+  function aplicarPadraoAqui() {
+    const e = estiloRef.current
+    if (!e) return
+    replaceProject(aplicarEstilo(projectRef.current, e))
+  }
+
+  function baixarPadrao() {
+    const e = estiloRef.current ?? estiloDoProjeto(projectRef.current)
+    const blob = new Blob([JSON.stringify(e, null, 2)], { type: 'application/json' })
+    downloadBlob(blob, `${slugify(usuario)}.json`)
+  }
+
+  async function abrirPadrao(file: File) {
+    try {
+      const lido = normalizarEstilo(JSON.parse(await file.text()))
+      if (!lido) throw new Error('Este arquivo não parece um padrão estético.')
+      await salvarEstilo(usuario, lido)
+      setEstilo(lido)
+      window.alert(`Padrão carregado e salvo para "${usuario}".`)
+    } catch (err) {
+      window.alert(
+        err instanceof Error ? err.message : 'Não consegui ler este arquivo.',
+      )
+    }
+  }
+
+  /** Lê um .md de roteiro e monta o carrossel já no padrão da pessoa. */
+  async function importarMarkdown(file: File) {
+    try {
+      const lido = lerMarkdown(await file.text())
+      if (lido.slides.length === 0) {
+        window.alert('Não achei nenhum slide neste arquivo. Baixe o modelo pra ver o formato.')
+        return
+      }
+      if (!(await saveBeforeLeaving())) return
+      const base = estiloRef.current
+      let novo: Project = {
+        title: lido.titulo || file.name.replace(/\.md$/i, '') || 'Carrossel importado',
+        font: base?.font ?? projectRef.current.font,
+        customFont: base?.customFont ?? projectRef.current.customFont,
+        captionLeft: base?.captionLeft ?? projectRef.current.captionLeft,
+        captionRight: base?.captionRight ?? projectRef.current.captionRight,
+        slides: lido.slides,
+      }
+      if (base) novo = aplicarEstilo(novo, base)
+      // Assinatura escrita no próprio .md vence a do padrão.
+      if (lido.captionLeft !== undefined) novo.captionLeft = lido.captionLeft
+      if (lido.captionRight !== undefined) novo.captionRight = lido.captionRight
+
+      const id = newId()
+      setProjectId(id)
+      replaceProject(novo)
+      setSelectedId(novo.slides[0]?.id ?? '')
+      await saveProjectToStorage(id, novo)
+      refreshList()
+      const resumo = `${novo.slides.length} slides importados.`
+      window.alert(
+        lido.avisos.length > 0
+          ? `${resumo}\n\nConfira:\n• ${lido.avisos.join('\n• ')}`
+          : `${resumo} Agora é só colocar as fotos.`,
+      )
+    } catch (err) {
+      window.alert(
+        err instanceof Error ? `Não consegui ler o arquivo: ${err.message}` : 'Não consegui ler o arquivo.',
+      )
+    }
+  }
+
+  function baixarModeloMd() {
+    downloadBlob(new Blob([MODELO_MD], { type: 'text/markdown' }), 'modelo-carrossel.md')
   }
 
   async function newCarousel() {
@@ -1396,6 +1507,58 @@ export default function App() {
                 onValueChange={(v) => setProject((p) => ({ ...p, captionRight: v }))}
               />
             </label>
+          </section>
+
+          <section className="card card--import">
+            <h2 className="card-title">Roteiro em .md</h2>
+            <div className="control-row control-row--wrap">
+              <FileButton
+                label="Importar .md"
+                accept=".md,.markdown,.txt,text/markdown,text/plain"
+                onFile={(f) => void importarMarkdown(f)}
+                className="btn btn--full"
+              />
+            </div>
+            <p className="hint">
+              Vira um carrossel novo já com o seu padrão. Cada “## Slide 1”,
+              “## Slide 2”… é um slide; escreva o tipo no próprio título
+              (“— tela partida”, “— desenvolvimento 1”) e, na tela partida,
+              separe as metades com “Cima:” e “Baixo:”.
+            </p>
+            <button type="button" className="btn btn--small" onClick={baixarModeloMd}>
+              Baixar modelo .md
+            </button>
+          </section>
+
+          <section className="card card--estilo">
+            <h2 className="card-title">Padrão estético</h2>
+            <p className="hint">
+              {estilo
+                ? `Salvo para "${usuario}": fonte, assinaturas e ajustes de texto. Todo carrossel novo e todo .md importado já nascem assim.`
+                : `Nenhum padrão salvo para "${usuario}" ainda. Monte um carrossel do jeito certo e salve — os próximos saem iguais.`}
+            </p>
+            <button type="button" className="btn btn--full" onClick={() => void salvarPadrao()}>
+              Salvar este como padrão
+            </button>
+            <div className="control-row control-row--wrap">
+              <button
+                type="button"
+                className="btn btn--small"
+                disabled={!estilo}
+                onClick={aplicarPadraoAqui}
+              >
+                Aplicar aqui
+              </button>
+              <button type="button" className="btn btn--small" onClick={baixarPadrao}>
+                Baixar padrão
+              </button>
+              <FileButton
+                label="Abrir padrão"
+                accept="application/json,.json"
+                onFile={(f) => void abrirPadrao(f)}
+                className="btn btn--small"
+              />
+            </div>
           </section>
 
           <section className="card card--library">

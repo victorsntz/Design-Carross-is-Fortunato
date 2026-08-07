@@ -16,6 +16,24 @@ interface AccessUser {
   hash: string
 }
 
+/**
+ * Quem está logado agora. O padrão estético é guardado por pessoa, então
+ * o resto do app precisa saber o nome — sem lista de acessos publicada,
+ * todo mundo divide o mesmo padrão ("convidado").
+ */
+export function usuarioLogado(): string {
+  try {
+    const bruto = localStorage.getItem(STORAGE_KEY)
+    if (!bruto) return 'convidado'
+    const { usuario } = JSON.parse(bruto) as { usuario?: unknown }
+    return typeof usuario === 'string' && usuario.trim() !== ''
+      ? usuario.trim()
+      : 'convidado'
+  } catch {
+    return 'convidado'
+  }
+}
+
 export async function sha256Hex(text: string): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
   return Array.from(new Uint8Array(buf))

@@ -253,6 +253,25 @@ body {
   color: var(--text-dim);
 }
 
+/* Facilitadores de produção: cor própria, separados do design do slide */
+.card--import {
+  border-color: rgba(226, 180, 106, 0.45);
+  background: #241f16;
+}
+
+.card--import .card-title {
+  color: #e8b46a;
+}
+
+.card--estilo {
+  border-color: rgba(199, 154, 210, 0.45);
+  background: #221c26;
+}
+
+.card--estilo .card-title {
+  color: #c79ad2;
+}
+
 /* "Meus carrosséis" é gaveta de arquivos, não design: cor própria */
 .card--library {
   border-color: rgba(111, 199, 189, 0.45);
