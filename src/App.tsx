@@ -1213,7 +1213,7 @@ export default function App() {
    */
   async function montarDoTexto(fonte: string, nomeFallback: string) {
     try {
-      const lido = lerMarkdown(fonte)
+      const lido = lerMarkdown(fonte, { sequencia: estiloRef.current?.sequencia })
       if (lido.slides.length === 0) {
         window.alert('Não achei nenhum slide neste arquivo. Baixe o modelo pra ver o formato.')
         return

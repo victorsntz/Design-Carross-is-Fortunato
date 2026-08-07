@@ -44,6 +44,11 @@ export interface EstiloUsuario {
   weight: FontWeight
   /** Filete entre as metades da tela partida. */
   divider: Divider
+  /**
+   * Ritmo de tipos do carrossel: usado quando o roteiro não diz qual é
+   * cada slide. Vazio = o leitor deduz pelo formato do conteúdo.
+   */
+  sequencia?: SlideType[]
   /** Ajustes de texto por tipo de slide. */
   tipos: Partial<Record<SlideType, AjustesDeTexto>>
   /** Quando foi salvo, só pra informar na tela. */
@@ -108,6 +113,8 @@ export function estiloDoProjeto(p: Project): EstiloUsuario {
     palette: p.palette ?? PALETA_PADRAO,
     weight: p.weight ?? 'normal',
     divider: p.divider ?? FILETE_PADRAO,
+    // O ritmo sai do próprio carrossel modelo, na ordem em que ele está
+    sequencia: p.slides.map((s) => s.type),
     tipos,
     salvoEm: Date.now(),
   }
@@ -195,6 +202,9 @@ export function normalizarEstilo(bruto: unknown): EstiloUsuario | null {
       caption: cor(bp.caption, PALETA_PADRAO.caption),
     },
     weight: b.weight === 'bold' ? 'bold' : 'normal',
+    sequencia: Array.isArray(b.sequencia)
+      ? (b.sequencia.filter((t) => TIPOS.includes(t as SlideType)) as SlideType[])
+      : undefined,
     divider: {
       color: cor((b.divider as Record<string, unknown>)?.color, FILETE_PADRAO.color),
       size: Math.min(

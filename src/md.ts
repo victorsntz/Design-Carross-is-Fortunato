@@ -276,7 +276,18 @@ function montaSlide(
   return slide
 }
 
-export function lerMarkdown(fonte: string): ResultadoImportacao {
+/**
+ * Ritmo de tipos do cliente: quando o roteiro não diz qual é o slide, a
+ * sequência do padrão dele manda. O tipo escrito no título sempre vence.
+ */
+export interface OpcoesLeitura {
+  sequencia?: SlideType[]
+}
+
+export function lerMarkdown(
+  fonte: string,
+  opcoes: OpcoesLeitura = {},
+): ResultadoImportacao {
   const avisos: string[] = []
   const linhas = fonte.replace(/\r\n?/g, '\n').split('\n')
 
@@ -386,8 +397,10 @@ export function lerMarkdown(fonte: string): ResultadoImportacao {
     const { partes } = partesDoSlide(bloco.linhas)
     if (partes.length === 0) return
     const escrito = tipoDoTitulo(bloco.titulo)
-    const tipo = escrito ?? deduzTipo(partes, bloco.linhas)
-    if (!escrito) {
+    // Ordem de decisão: o que está escrito > o ritmo do cliente > o palpite
+    const doRitmo = opcoes.sequencia?.[slides.length]
+    const tipo = escrito ?? (doRitmo ? { type: doRitmo } : deduzTipo(partes, bloco.linhas))
+    if (!escrito && !doRitmo) {
       const nomes: Record<SlideType, string> = {
         split: 'tela partida',
         comparison: 'foto de fundo',
