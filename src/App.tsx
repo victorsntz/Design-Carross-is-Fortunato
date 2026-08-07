@@ -541,10 +541,7 @@ export default function App() {
     void navigator.storage?.persist?.().catch(() => {})
   }, [])
 
-  // Padrão estético de quem entrou: o salvo aqui vence o publicado no site.
-  useEffect(() => {
-    void estiloAtual(usuario).then(setEstilo)
-  }, [usuario])
+
 
   // Registra a fonte da pessoa num <style> com @font-face: assim ela vale no
   // editor E é embarcada na exportação dos PNGs.
@@ -587,17 +584,24 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false
-    void loadCurrentProject().then((current) => {
-      if (cancelled) return
-      if (current) {
-        setProjectId(current.id)
-        replaceProject(current.project)
-        setSelectedId(current.project.slides[0]?.id ?? '')
-        lastSavedRef.current = current.project
-      }
-      setHydrated(true)
-      refreshList()
-    })
+    // O padrão da pessoa entra junto: quem abre pela primeira vez precisa
+    // ver o primeiro carrossel já com a estética dela, não com a genérica.
+    void Promise.all([loadCurrentProject(), estiloAtual(usuario)]).then(
+      ([current, padrao]) => {
+        if (cancelled) return
+        if (padrao) setEstilo(padrao)
+        if (current) {
+          setProjectId(current.id)
+          replaceProject(current.project)
+          setSelectedId(current.project.slides[0]?.id ?? '')
+          lastSavedRef.current = current.project
+        } else if (padrao) {
+          replaceProject(aplicarEstilo(projectRef.current, padrao))
+        }
+        setHydrated(true)
+        refreshList()
+      },
+    )
     return () => {
       cancelled = true
     }
