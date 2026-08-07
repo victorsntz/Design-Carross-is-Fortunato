@@ -61,7 +61,7 @@ export const PHOTO_TOP_H = 660
 // texto, então os padrões assumem parágrafos cheios. Cada tipo tem sua
 // escala (o Desenvolvimento 2 desce até 28px pra textos bem longos).
 const FONT_SIZES: Record<Slide['type'], number[]> = {
-  split: [28, 32, 36, 40, 45],
+  split: [28, 32, 36, 40, 45, 50, 56, 62],
   comparison: [32, 36, 40, 45, 50],
   development: [26, 30, 34, 38, 43],
   book: [26, 30, 34, 38, 42],
