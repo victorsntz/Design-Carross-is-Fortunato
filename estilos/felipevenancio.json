@@ -1,0 +1,60 @@
+{
+  "font": "sans",
+  "customFont": null,
+  "weight": "bold",
+  "captionLeft": "FELIPE VENÂNCIO\n@FELIPEVENANCIO.IA",
+  "captionRight": "ESPECIALISTA EM IA\nE DIREITO TRIBUTÁRIO",
+  "palette": {
+    "bg": "#010839",
+    "text": "#ffffff",
+    "caption": "#ffffff"
+  },
+  "divider": {
+    "color": "#a0dd00",
+    "size": 13
+  },
+  "sequencia": [
+    "split",
+    "split",
+    "split",
+    "final",
+    "development",
+    "photoTop",
+    "final",
+    "development",
+    "final",
+    "photoTop"
+  ],
+  "tipos": {
+    "split": {
+      "sizeStep": 4,
+      "lineHeight": 1.02,
+      "letterSpacing": -0.05,
+      "align": "center"
+    },
+    "development": {
+      "sizeStep": 3,
+      "lineHeight": 1.14,
+      "letterSpacing": -0.05,
+      "align": "left"
+    },
+    "final": {
+      "sizeStep": 1,
+      "lineHeight": 1.14,
+      "letterSpacing": -0.05,
+      "align": "left"
+    },
+    "photoTop": {
+      "sizeStep": 4,
+      "lineHeight": 1.11,
+      "letterSpacing": -0.05,
+      "align": "center"
+    },
+    "comparison": {
+      "sizeStep": 4,
+      "lineHeight": 1.02,
+      "letterSpacing": -0.05,
+      "align": "center"
+    }
+  }
+}
