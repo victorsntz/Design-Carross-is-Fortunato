@@ -40,26 +40,48 @@ const semAcento = (t: string) =>
 const SECAO_IGNORADA =
   /^(legenda|nota|notas|observ|refer|fonte|fontes|checklist|status|estrutura|briefing|copy do post)\b|nao publicar/
 
-/** Tipo do slide escrito no título ("SLIDE 5 (desenvolvimento)"). */
-function tipoDoTitulo(titulo: string): { type: SlideType; vertical?: boolean } | null {
+/**
+ * LAYOUT escrito no título ("SLIDE 5 (desenvolvimento 1)", "(em pé)").
+ *
+ * Só entra aqui o que descreve a ARTE do slide. Isso manda em tudo: se
+ * está escrito qual é o layout, é ele e pronto.
+ */
+function layoutDoTitulo(titulo: string): { type: SlideType; vertical?: boolean } | null {
   const t = semAcento(titulo)
   if (/(em pe|vertical|lado a lado|colunas|duas colunas)/.test(t)) {
     return { type: 'split', vertical: true }
   }
-  if (/(tela partida|partida|comparativ|comparacao|par de|antes e depois)/.test(t)) {
+  if (/(tela partida|partida deitada)/.test(t)) {
     return { type: 'split' }
   }
   if (/(desenvolvimento\s*3|\bdev\s*3\b|\bd3\b|foto (em|de) cima|foto deitada|imagem em cima)/.test(t)) {
     return { type: 'photoTop' }
   }
-  if (
-    /(desenvolvimento\s*2|\bdev\s*2\b|\bd2\b|respiro|foto (a|na|à) direita|\bfinal\b|fechamento|encerramento|conclusao|convite|\bcta\b|chamada|newsletter|me segue)/.test(
-      t,
-    )
-  ) {
+  if (/(desenvolvimento\s*2|\bdev\s*2\b|\bd2\b|respiro|foto (a|na|à) direita|texto a esquerda)/.test(t)) {
     return { type: 'final' }
   }
-  if (/(desenvolvimento|\bdev\s*1\b|\bd1\b|foto de fundo|texto corrido|\btexto\b)/.test(t)) {
+  if (/(desenvolvimento\s*1|\bdev\s*1\b|\bd1\b|foto de fundo|texto corrido)/.test(t)) {
+    return { type: 'development' }
+  }
+  return null
+}
+
+/**
+ * FUNÇÃO escrita no título ("(CTA)", "(fechamento)", "(capa)").
+ *
+ * Diz o papel do slide no carrossel, não a arte — e qual arte cada
+ * cliente usa pro CTA muda. Por isso a função só decide quando o padrão
+ * da pessoa não tem um ritmo próprio pra dizer.
+ */
+function funcaoDoTitulo(titulo: string): { type: SlideType } | null {
+  const t = semAcento(titulo)
+  if (/(\bcta\b|convite|chamada|newsletter|me segue|\bfinal\b|fechamento|encerramento|conclusao)/.test(t)) {
+    return { type: 'final' }
+  }
+  if (/(comparativ|comparacao|par de|antes e depois|\bcapa\b|abertura|gancho)/.test(t)) {
+    return { type: 'split' }
+  }
+  if (/(desenvolvimento|\btexto\b|corpo|argumento)/.test(t)) {
     return { type: 'development' }
   }
   return null
@@ -396,11 +418,20 @@ export function lerMarkdown(
     const rotulo = bloco.titulo.trim() || `Slide ${i + 1}`
     const { partes } = partesDoSlide(bloco.linhas)
     if (partes.length === 0) return
-    const escrito = tipoDoTitulo(bloco.titulo)
-    // Ordem de decisão: o que está escrito > o ritmo do cliente > o palpite
+    // Ordem de decisão, da mais forte pra mais fraca:
+    //   1. o layout escrito no título      (é a arte, não tem o que discutir)
+    //   2. o ritmo do padrão do cliente    (o revezamento que ele já usa)
+    //   3. a função escrita no título      (CTA, fechamento, capa)
+    //   4. o palpite pelo formato do texto
+    const layout = layoutDoTitulo(bloco.titulo)
     const doRitmo = opcoes.sequencia?.[slides.length]
-    const tipo = escrito ?? (doRitmo ? { type: doRitmo } : deduzTipo(partes, bloco.linhas))
-    if (!escrito && !doRitmo) {
+    const funcao = funcaoDoTitulo(bloco.titulo)
+    const tipo =
+      layout ??
+      (doRitmo ? { type: doRitmo } : null) ??
+      funcao ??
+      deduzTipo(partes, bloco.linhas)
+    if (!layout && !doRitmo && !funcao) {
       const nomes: Record<SlideType, string> = {
         split: 'tela partida',
         comparison: 'foto de fundo',
