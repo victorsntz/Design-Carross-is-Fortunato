@@ -280,6 +280,27 @@ body {
   background: #241f16;
 }
 
+.paste-box {
+  min-height: 120px;
+  max-height: 220px;
+  overflow-y: auto;
+  resize: vertical;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  width: 100%;
+}
+
+.paste-box:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .card--import .card-title {
   color: #e8b46a;
 }

@@ -448,6 +448,8 @@ export default function App() {
   // tudo que entra por importação.
   const usuario = usuarioLogado()
   const [estilo, setEstilo] = useState<EstiloUsuario | null>(null)
+  // string = caixa de colar aberta (navegador que não deixa ler o clipboard)
+  const [colando, setColando] = useState<string | null>(null)
   const estiloRef = useRef<EstiloUsuario | null>(null)
   estiloRef.current = estilo
   const [selectedId, setSelectedId] = useState<string>(() => project.slides[0]?.id ?? '')
@@ -1202,8 +1204,16 @@ export default function App() {
 
   /** Lê um .md de roteiro e monta o carrossel já no padrão da pessoa. */
   async function importarMarkdown(file: File) {
+    await montarDoTexto(await file.text(), file.name.replace(/\.(md|markdown|txt)$/i, ''))
+  }
+
+  /**
+   * Monta o carrossel a partir do texto do roteiro — vindo de arquivo ou
+   * colado da área de transferência, tanto faz.
+   */
+  async function montarDoTexto(fonte: string, nomeFallback: string) {
     try {
-      const lido = lerMarkdown(await file.text())
+      const lido = lerMarkdown(fonte)
       if (lido.slides.length === 0) {
         window.alert('Não achei nenhum slide neste arquivo. Baixe o modelo pra ver o formato.')
         return
@@ -1211,7 +1221,7 @@ export default function App() {
       if (!(await saveBeforeLeaving())) return
       const base = estiloRef.current
       let novo: Project = {
-        title: lido.titulo || file.name.replace(/\.md$/i, '') || 'Carrossel importado',
+        title: lido.titulo || nomeFallback || 'Carrossel importado',
         font: base?.font ?? projectRef.current.font,
         customFont: base?.customFont ?? projectRef.current.customFont,
         captionLeft: base?.captionLeft ?? projectRef.current.captionLeft,
@@ -1237,8 +1247,28 @@ export default function App() {
       )
     } catch (err) {
       window.alert(
-        err instanceof Error ? `Não consegui ler o arquivo: ${err.message}` : 'Não consegui ler o arquivo.',
+        err instanceof Error
+          ? `Não consegui ler o roteiro: ${err.message}`
+          : 'Não consegui ler o roteiro.',
       )
+    }
+  }
+
+  /**
+   * Cola o roteiro direto da área de transferência: no Claude é só clicar
+   * em copiar e vir pra cá, sem baixar arquivo nenhum. Onde o navegador
+   * não deixa ler o clipboard sozinho, abre uma caixa pra colar na mão.
+   */
+  async function colarRoteiro() {
+    try {
+      const texto = await navigator.clipboard.readText()
+      if (texto.trim() === '') {
+        window.alert('Não tem nada copiado. Clique em copiar no roteiro e tente de novo.')
+        return
+      }
+      await montarDoTexto(texto, 'Carrossel colado')
+    } catch {
+      setColando('')
     }
   }
 
@@ -1557,24 +1587,65 @@ export default function App() {
           </section>
 
           <section className="card card--import">
-            <h2 className="card-title">Roteiro em .md</h2>
+            <h2 className="card-title">Roteiro</h2>
+            <button
+              type="button"
+              className="btn btn--full btn--primary"
+              onClick={() => void colarRoteiro()}
+            >
+              Colar roteiro
+            </button>
+            <p className="hint">
+              Copie o roteiro inteiro lá onde ele foi escrito e clique aqui:
+              vira um carrossel novo já no seu padrão. Cada “## Slide 1”,
+              “## Slide 2”… é um slide; o tipo pode vir escrito no próprio
+              título (“— tela partida”, “— desenvolvimento 1”) e, na tela
+              partida, as metades saem de “Texto de cima:” e “Texto de baixo:”.
+            </p>
+            {colando !== null && (
+              <div className="field">
+                <span>Cole aqui com Ctrl+V (ou Cmd+V)</span>
+                <textarea
+                  className="paste-box"
+                  autoFocus
+                  value={colando}
+                  onChange={(e) => setColando(e.target.value)}
+                  placeholder="Cole o roteiro inteiro…"
+                />
+                <div className="control-row control-row--wrap">
+                  <button
+                    type="button"
+                    className="btn btn--small btn--primary"
+                    disabled={colando.trim() === ''}
+                    onClick={() => {
+                      const texto = colando
+                      setColando(null)
+                      void montarDoTexto(texto, 'Carrossel colado')
+                    }}
+                  >
+                    Montar carrossel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--small"
+                    onClick={() => setColando(null)}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="control-row control-row--wrap">
               <FileButton
-                label="Importar .md"
+                label="Abrir .md"
                 accept=".md,.markdown,.txt,text/markdown,text/plain"
                 onFile={(f) => void importarMarkdown(f)}
-                className="btn btn--full"
+                className="btn btn--small"
               />
+              <button type="button" className="btn btn--small" onClick={baixarModeloMd}>
+                Baixar modelo
+              </button>
             </div>
-            <p className="hint">
-              Vira um carrossel novo já com o seu padrão. Cada “## Slide 1”,
-              “## Slide 2”… é um slide; escreva o tipo no próprio título
-              (“— tela partida”, “— desenvolvimento 1”) e, na tela partida,
-              separe as metades com “Cima:” e “Baixo:”.
-            </p>
-            <button type="button" className="btn btn--small" onClick={baixarModeloMd}>
-              Baixar modelo .md
-            </button>
           </section>
 
           <section className="card card--estilo">
