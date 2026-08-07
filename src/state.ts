@@ -216,6 +216,8 @@ function stripVolatileMedia(project: Project): Project {
 // ---------------------------------------------------------------------------
 
 export interface ProjectSummary {
+  /** Cliente dono do carrossel (vazio = carrosséis de antes da Central). */
+  cliente?: string
   id: string
   title: string
   updatedAt: number
@@ -229,6 +231,19 @@ interface StoredRecord {
 }
 
 const CURRENT_KEY = '__carrossel-atual'
+
+/**
+ * De quem é o espaço de trabalho atual. O estúdio entra em vários
+ * clientes no mesmo navegador, e o carrossel aberto de um não pode
+ * aparecer quando se abre o outro.
+ */
+let ESCOPO = ''
+
+export function definirEscopo(id: string): void {
+  ESCOPO = id.trim()
+}
+
+const chaveDoAtual = () => (ESCOPO ? `${CURRENT_KEY}:${ESCOPO}` : CURRENT_KEY)
 const LEGACY_DB_KEY = 'atual'
 
 export function txDone(tx: IDBTransaction): Promise<void> {
@@ -260,6 +275,7 @@ export async function saveProjectToStorage(
     }
     const summary: ProjectSummary = {
       id,
+      cliente: ESCOPO,
       title: project.title.trim() || 'Carrossel sem título',
       updatedAt: record.updatedAt,
       slideCount: project.slides.length,
@@ -268,7 +284,7 @@ export async function saveProjectToStorage(
     try {
       const tx = db.transaction([DB_STORE, DB_META], 'readwrite')
       tx.objectStore(DB_STORE).put(record, id)
-      tx.objectStore(DB_STORE).put(id, CURRENT_KEY)
+      tx.objectStore(DB_STORE).put(id, chaveDoAtual())
       tx.objectStore(DB_META).put(summary, id)
       await txDone(tx)
     } finally {
@@ -322,6 +338,7 @@ function sanitizeSummary(v: unknown): ProjectSummary | null {
   if (typeof s.id !== 'string' || s.id === '') return null
   return {
     id: s.id,
+    cliente: typeof s.cliente === 'string' ? s.cliente : '',
     title: typeof s.title === 'string' && s.title.trim() !== '' ? s.title : 'Carrossel sem título',
     updatedAt: typeof s.updatedAt === 'number' ? s.updatedAt : 0,
     slideCount: typeof s.slideCount === 'number' ? s.slideCount : 0,
@@ -334,10 +351,17 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     try {
       const metaTx = db.transaction(DB_META, 'readonly')
       const metas = await reqResult(metaTx.objectStore(DB_META).getAll())
-      const summaries = metas
+      // Carrossel sem cliente é de antes da Central: aparece pra todo
+      // mundo, pra ninguém perder trabalho antigo.
+      const meu = (s: ProjectSummary) => !s.cliente || s.cliente === ESCOPO
+      const todos = metas
         .map(sanitizeSummary)
         .filter((s): s is ProjectSummary => s !== null)
-      if (summaries.length > 0) {
+      // A decisão de reconstruir olha o store INTEIRO, não a lista filtrada:
+      // um cliente novo (sem carrossel ainda) não pode disparar a
+      // reconstrução, que reescreveria os resumos dos outros sem o dono.
+      if (todos.length > 0) {
+        const summaries = todos.filter(meu)
         summaries.sort((a, b) => b.updatedAt - a.updatedAt)
         return summaries
       }
@@ -389,7 +413,7 @@ export async function loadCurrentProject(): Promise<{
     try {
       const tx = db.transaction(DB_STORE, 'readonly')
       const store = tx.objectStore(DB_STORE)
-      currentId = await reqResult(store.get(CURRENT_KEY))
+      currentId = await reqResult(store.get(chaveDoAtual()))
       if (typeof currentId === 'string') {
         record = await reqResult(store.get(currentId))
       }

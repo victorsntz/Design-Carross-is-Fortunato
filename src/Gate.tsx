@@ -14,7 +14,12 @@ const STORAGE_KEY = 'criador-acesso'
 interface AccessUser {
   usuario: string
   hash: string
+  /** Conta do estúdio: entra em qualquer cliente sem senha. */
+  admin?: boolean
 }
+
+/** Chave do cliente em que o estúdio está trabalhando agora. */
+const CLIENTE_KEY = 'criador-cliente'
 
 /**
  * Quem está logado agora. O padrão estético é guardado por pessoa, então
@@ -32,6 +37,43 @@ export function usuarioLogado(): string {
   } catch {
     return 'convidado'
   }
+}
+
+/** A conta logada é do estúdio? Só ela vê o menu de clientes. */
+export function ehEstudio(): boolean {
+  try {
+    const bruto = localStorage.getItem(STORAGE_KEY)
+    if (!bruto) return false
+    return (JSON.parse(bruto) as { admin?: unknown }).admin === true
+  } catch {
+    return false
+  }
+}
+
+/** Cliente escolhido no menu do estúdio (vazio = nenhum ainda). */
+export function clienteAtivo(): string {
+  try {
+    return localStorage.getItem(CLIENTE_KEY)?.trim() ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function definirClienteAtivo(id: string): void {
+  try {
+    if (id) localStorage.setItem(CLIENTE_KEY, id)
+    else localStorage.removeItem(CLIENTE_KEY)
+  } catch {
+    // navegador sem localStorage: o estúdio escolhe de novo a cada sessão
+  }
+}
+
+/**
+ * De quem é a estética que vale agora: o cliente escolhido pelo estúdio,
+ * ou a própria pessoa logada.
+ */
+export function identidadeAtiva(): string {
+  return (ehEstudio() && clienteAtivo()) || usuarioLogado()
 }
 
 export async function sha256Hex(text: string): Promise<string> {
@@ -209,7 +251,13 @@ export default function Gate({ children }: { children: ReactNode }) {
     const u = usuario.trim()
     const hash = await sha256Hex(`${u}:${senha}`)
     if (users.some((x) => x.usuario === u && x.hash === hash)) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ usuario: u, hash }))
+      const conta = users.find((x) => x.usuario === u && x.hash === hash)
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ usuario: u, hash, admin: conta?.admin === true }),
+      )
+      // Trocar de conta zera o cliente em que se estava trabalhando
+      definirClienteAtivo('')
       setState('ok')
     } else {
       setErro('Usuário ou senha inválidos. Confere com quem te passou o acesso.')

@@ -1,7 +1,8 @@
 [
   {
     "usuario": "fortunato",
-    "hash": "e1bcfb731406aaac4d52ceb603a0a8c377bbfc2273191f0d74fc4196fe81cffa"
+    "hash": "e1bcfb731406aaac4d52ceb603a0a8c377bbfc2273191f0d74fc4196fe81cffa",
+    "admin": true
   },
   {
     "usuario": "guilhermemarques",
@@ -13,7 +14,8 @@
   },
   {
     "usuario": "victorfortunato",
-    "hash": "2629d8246f121eeb1d8608697477feff442365e93afb0f8adb8054b08193c3bf"
+    "hash": "2629d8246f121eeb1d8608697477feff442365e93afb0f8adb8054b08193c3bf",
+    "admin": true
   },
   {
     "usuario": "rebecafortunato",

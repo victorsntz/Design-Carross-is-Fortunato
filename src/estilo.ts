@@ -290,6 +290,46 @@ export async function apagarEstilo(usuario: string): Promise<void> {
   }
 }
 
+export interface ClienteDoEstudio {
+  id: string
+  nome: string
+  /** Cores do padrão dele, pra amostra no menu. */
+  palette?: Palette
+  /** true quando existe um padrão publicado pra ele. */
+  temPadrao?: boolean
+}
+
+/**
+ * Lista de clientes do estúdio, publicada em estilos/index.json. É o que
+ * alimenta o menu de quem entra com a conta do estúdio.
+ */
+export async function listarClientes(): Promise<ClienteDoEstudio[]> {
+  try {
+    const r = await fetch(`${import.meta.env.BASE_URL}estilos/index.json`, {
+      cache: 'no-store',
+    })
+    if (!r.ok) return []
+    const bruto: unknown = await r.json()
+    if (!Array.isArray(bruto)) return []
+    const lista = bruto.filter(
+      (c): c is ClienteDoEstudio =>
+        typeof c === 'object' &&
+        c !== null &&
+        typeof (c as ClienteDoEstudio).id === 'string' &&
+        typeof (c as ClienteDoEstudio).nome === 'string',
+    )
+    // Busca o padrão de cada um só pra mostrar as cores na amostra
+    return Promise.all(
+      lista.map(async (c) => {
+        const e = await buscarEstiloPublicado(c.id)
+        return { ...c, palette: e?.palette, temPadrao: e !== null }
+      }),
+    )
+  } catch {
+    return []
+  }
+}
+
 /**
  * Padrão publicado junto do site em estilos/<usuario>.json. É o que
  * permite montar o modelo base aqui e entregar pronto pro cliente, já

@@ -23,6 +23,7 @@ import {
 } from './components/SlideRenderer'
 import {
   defaultProject,
+  definirEscopo,
   deleteProjectFromStorage,
   listProjects,
   loadCurrentProject,
@@ -35,13 +36,20 @@ import {
 } from './state'
 import { clipboardToMedia, fileToMedia } from './media'
 import { lerMarkdown, MODELO_MD } from './md'
-import { usuarioLogado } from './Gate'
+import {
+  clienteAtivo,
+  definirClienteAtivo,
+  ehEstudio,
+  usuarioLogado,
+} from './Gate'
 import {
   aplicarEstilo,
   estiloAtual,
   estiloDoProjeto,
+  listarClientes,
   normalizarEstilo,
   salvarEstilo,
+  type ClienteDoEstudio,
   type EstiloUsuario,
 } from './estilo'
 import {
@@ -148,6 +156,81 @@ function TypeIcon({ type, vertical = false }: { type: SlideType; vertical?: bool
       <line x1="4" y1="17" x2="11" y2="17" stroke={c} strokeWidth="1.5" />
       <line x1="4" y1="21" x2="9" y2="21" stroke={c} strokeWidth="1.5" />
     </svg>
+  )
+}
+
+/**
+ * Menu do estúdio: a conta do Fortunato não edita nada direto — ela
+ * escolhe pra qual cliente vai trabalhar, e o Criador abre já com a
+ * estética daquele cliente, sem pedir senha de novo.
+ */
+function MenuDeClientes({
+  clientes,
+  carregando,
+  onEscolher,
+  onSair,
+}: {
+  clientes: ClienteDoEstudio[]
+  carregando: boolean
+  onEscolher: (id: string) => void
+  onSair: () => void
+}) {
+  return (
+    <div className="central">
+      <div className="central-box">
+        <header className="central-head">
+          <p className="central-sobre">FORTUNATO ESTÚDIO</p>
+          <h1>Central</h1>
+          <p className="central-sub">
+            Escolha o cliente: o Criador abre com a fonte, as cores e o ritmo
+            de slides dele já aplicados.
+          </p>
+        </header>
+        {carregando ? (
+          <p className="central-vazio">Carregando os clientes…</p>
+        ) : clientes.length === 0 ? (
+          <p className="central-vazio">
+            Nenhum cliente publicado ainda. A lista vive em estilos/index.json.
+          </p>
+        ) : (
+          <ul className="central-lista">
+            {clientes.map((c) => {
+              const p = c.palette
+              return (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    className="central-item"
+                    onClick={() => onEscolher(c.id)}
+                  >
+                    <span
+                      className="central-amostra"
+                      aria-hidden
+                      style={{
+                        background: p?.bg ?? '#0b0b0b',
+                        color: p?.text ?? '#fff',
+                      }}
+                    >
+                      Aa
+                    </span>
+                    <span className="central-nome">
+                      {c.nome}
+                      <small>
+                        {c.temPadrao ? 'estética própria' : 'padrão da casa'}
+                      </small>
+                    </span>
+                    <span className="central-abrir">Abrir →</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        <button type="button" className="btn btn--small central-sair" onClick={onSair}>
+          Sair da conta
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -446,7 +529,24 @@ export default function App() {
   const [saved, setSaved] = useState<ProjectSummary[]>([])
   // Padrão estético de quem está logado: vale pros carrosséis novos e pra
   // tudo que entra por importação.
-  const usuario = usuarioLogado()
+  const estudio = ehEstudio()
+  const [cliente, setCliente] = useState(() => clienteAtivo())
+  // A estética que vale: o cliente escolhido pelo estúdio, ou a própria pessoa
+  const usuario = estudio && cliente ? cliente : usuarioLogado()
+  const [clientes, setClientes] = useState<ClienteDoEstudio[]>([])
+  const [carregandoClientes, setCarregandoClientes] = useState(true)
+  // Na Central o app fica parado: nada de restaurar nem salvar rascunho,
+  // senão o carrossel padrão seria gravado no lugar do trabalho do cliente.
+  const naCentral = estudio && !cliente
+  definirEscopo(usuario)
+
+  useEffect(() => {
+    if (!estudio) return
+    void listarClientes().then((l) => {
+      setClientes(l)
+      setCarregandoClientes(false)
+    })
+  }, [estudio])
   const [estilo, setEstilo] = useState<EstiloUsuario | null>(null)
   // string = caixa de colar aberta (navegador que não deixa ler o clipboard)
   const [colando, setColando] = useState<string | null>(null)
@@ -586,6 +686,7 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false
+    if (naCentral) return
     // O padrão da pessoa entra junto: quem abre pela primeira vez precisa
     // ver o primeiro carrossel já com a estética dela, não com a genérica.
     void Promise.all([loadCurrentProject(), estiloAtual(usuario)]).then(
@@ -610,7 +711,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated || naCentral) return
     const t = setTimeout(() => {
       if (deletedIdsRef.current.has(projectId)) return
       void saveProjectToStorage(projectId, project).then((ok) => {
@@ -635,7 +736,7 @@ export default function App() {
 
   // Saiu da aba (ou fechou) antes do salvamento automático rodar? Salva já.
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated || naCentral) return
     const flush = () => {
       if (deletedIdsRef.current.has(projectIdRef.current)) return
       // Nada mudou desde a última gravação? Não escreve nada — senão uma aba
@@ -1340,6 +1441,34 @@ export default function App() {
     refreshList()
   }
 
+  /** Volta pro menu, guardando o que estava aberto. */
+  async function trocarCliente() {
+    if (!(await saveBeforeLeaving())) return
+    definirClienteAtivo('')
+    setCliente('')
+    window.location.reload()
+  }
+
+  // Conta do estúdio sem cliente escolhido: o menu vem antes de tudo.
+  if (estudio && !cliente) {
+    return (
+      <MenuDeClientes
+        clientes={clientes}
+        carregando={carregandoClientes}
+        onEscolher={(id) => {
+          definirClienteAtivo(id)
+          // Recarrega pra abrir limpo já na estética do cliente
+          window.location.reload()
+        }}
+        onSair={() => {
+          localStorage.removeItem('criador-acesso')
+          definirClienteAtivo('')
+          window.location.reload()
+        }}
+      />
+    )
+  }
+
   // Nada de editar antes de restaurar o que estava salvo: uma digitação nesse
   // intervalo seria atropelada quando o carrossel anterior chegasse.
   if (!hydrated) {
@@ -1401,12 +1530,23 @@ export default function App() {
             Salvo automaticamente neste navegador
           </span>
         )}
+        {estudio && (
+          <button
+            type="button"
+            className="btn btn--small btn--cliente"
+            title="Voltar pro menu e escolher outro cliente"
+            onClick={() => void trocarCliente()}
+          >
+            {clientes.find((c) => c.id === cliente)?.nome ?? cliente} ⇄
+          </button>
+        )}
         <button
           type="button"
           className="btn btn--small"
           title="Sair do Criador"
           onClick={() => {
             localStorage.removeItem('criador-acesso')
+            definirClienteAtivo('')
             window.location.reload()
           }}
         >
