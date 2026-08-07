@@ -27,8 +27,10 @@ interface BaseSlide {
   sizeStep: number
   /** Altura da linha (1.15–1.6). Sem valor = padrão do tipo. */
   lineHeight?: number
-  /** Espaço entre letras em em (-0.03–0.06). Sem valor = 0. */
+  /** Espaço entre letras em em (-0.06–0.06). Sem valor = 0. */
   letterSpacing?: number
+  /** Alinhamento do texto. Sem valor = o padrão do tipo. */
+  align?: 'left' | 'center'
 }
 
 /** Metade de uma tela partida: foto/vídeo + frase curta. */
@@ -124,6 +126,17 @@ export const PALETA_PADRAO: Palette = {
   caption: '#f2f2f2',
 }
 
+/** Peso do texto dos slides. */
+export type FontWeight = 'normal' | 'bold'
+
+/** Filete que separa as metades da tela partida (0 = sem filete). */
+export interface Divider {
+  color: string
+  size: number
+}
+
+export const FILETE_PADRAO: Divider = { color: '#eae422', size: 0 }
+
 export interface Project {
   /** Nome do carrossel, mostrado na lista "Meus carrosséis". */
   title: string
@@ -136,5 +149,9 @@ export interface Project {
   captionRight: string
   /** Sem valor = a paleta padrão (fundo quase preto, texto branco). */
   palette?: Palette
+  /** Peso dos textos. Sem valor = normal. */
+  weight?: FontWeight
+  /** Filete entre as metades da tela partida. Sem valor = nenhum. */
+  divider?: Divider
   slides: Slide[]
 }

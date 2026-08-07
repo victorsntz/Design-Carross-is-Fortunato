@@ -66,7 +66,7 @@ const FONT_SIZES: Record<Slide['type'], number[]> = {
   development: [26, 30, 34, 38, 43],
   book: [26, 30, 34, 38, 42],
   final: [28, 33, 38, 43, 48, 54, 60],
-  photoTop: [26, 30, 34, 38, 43],
+  photoTop: [26, 30, 34, 38, 43, 48, 54],
 }
 
 /** Passo padrão de cada tipo (mantém o tamanho visual de sempre). */
@@ -90,9 +90,9 @@ export function fontSizeFor(slide: Slide): number {
 }
 
 // Tipografia ajustável com guarda-corpo: nem esmagada, nem espalhada.
-export const LINE_HEIGHT_MIN = 1.15
+export const LINE_HEIGHT_MIN = 1.0
 export const LINE_HEIGHT_MAX = 1.6
-export const LETTER_SPACING_MIN = -0.03
+export const LETTER_SPACING_MIN = -0.06
 export const LETTER_SPACING_MAX = 0.06
 
 const DEFAULT_LINE_HEIGHT: Record<Slide['type'], number> = {
@@ -114,12 +114,19 @@ export function letterSpacingFor(slide: Slide): number {
   return Math.min(LETTER_SPACING_MAX, Math.max(LETTER_SPACING_MIN, v))
 }
 
+/** Alinhamento do texto: o do slide vence o padrão do tipo. */
+export function alignFor(slide: Slide): 'left' | 'center' | undefined {
+  return slide.align
+}
+
 /** Estilo tipográfico completo do texto do slide. */
 export function slideTextStyle(slide: Slide): CSSProperties {
+  const align = alignFor(slide)
   return {
     fontSize: fontSizeFor(slide),
     lineHeight: lineHeightFor(slide),
     letterSpacing: `${letterSpacingFor(slide)}em`,
+    ...(align ? { textAlign: align } : {}),
   }
 }
 
@@ -735,6 +742,7 @@ function SplitLayers({
         still={still}
         onEdit={onTextEdit && ((v) => onTextEdit('bottom', v))}
       />
+      <div className={`sl-split-divider${vertical ? ' sl-split-divider--v' : ''}`} />
     </>
   )
 }
@@ -1015,10 +1023,14 @@ export function SlideRenderer({
     .join(' ')
 
   const paleta = project.palette ?? PALETA_PADRAO
+  const filete = project.divider
   const corDoSlide = {
     '--sl-bg': paleta.bg,
     '--sl-text': paleta.text,
     '--sl-cap': paleta.caption,
+    '--sl-weight': project.weight === 'bold' ? '700' : '400',
+    '--sl-divider': filete && filete.size > 0 ? filete.color : 'transparent',
+    '--sl-divider-size': `${filete?.size ?? 0}px`,
     // A sombra que protege o texto por cima da foto acompanha o texto:
     // texto claro pede sombra escura, texto escuro pede sombra clara.
     '--sl-scrim': claro(paleta.text) ? '0, 0, 0' : '255, 255, 255',

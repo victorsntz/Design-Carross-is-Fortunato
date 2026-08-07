@@ -12,7 +12,7 @@ import type {
   SplitHalf,
   SplitSlide,
 } from './types'
-import { PALETA_PADRAO } from './types'
+import { FILETE_PADRAO, PALETA_PADRAO } from './types'
 import { DEFAULT_STEPS, sizeStepsFor } from './components/SlideRenderer'
 
 // Rascunho automático fica no IndexedDB: fotos de 10-13 slides estouram os
@@ -499,12 +499,14 @@ export function normalizeProject(data: unknown): Project | null {
     )
     merged.lineHeight =
       typeof merged.lineHeight === 'number' && Number.isFinite(merged.lineHeight)
-        ? Math.min(1.6, Math.max(1.15, merged.lineHeight))
+        ? Math.min(1.6, Math.max(1.0, merged.lineHeight))
         : undefined
     merged.letterSpacing =
       typeof merged.letterSpacing === 'number' && Number.isFinite(merged.letterSpacing)
-        ? Math.min(0.06, Math.max(-0.03, merged.letterSpacing))
+        ? Math.min(0.06, Math.max(-0.06, merged.letterSpacing))
         : undefined
+    merged.align =
+      merged.align === 'left' || merged.align === 'center' ? merged.align : undefined
     // Campos de texto precisam ser string de verdade: um .json editado na mão
     // (ou corrompido) não pode derrubar o app na hora de renderizar.
     switch (merged.type) {
@@ -593,6 +595,15 @@ export function normalizeProject(data: unknown): Project | null {
       text: corValida(paletaBruta.text, PALETA_PADRAO.text),
       caption: corValida(paletaBruta.caption, PALETA_PADRAO.caption),
     },
+    weight: (p as { weight?: unknown }).weight === 'bold' ? 'bold' : 'normal',
+    divider: (() => {
+      const d = (p as { divider?: Record<string, unknown> }).divider ?? {}
+      const tam = typeof d.size === 'number' && Number.isFinite(d.size) ? d.size : 0
+      return {
+        color: corValida(d.color, FILETE_PADRAO.color),
+        size: Math.min(60, Math.max(0, tam)),
+      }
+    })(),
     font:
       p.font === 'sans' ? 'sans' : p.font === 'custom' && customFont ? 'custom' : 'serif',
     customFont,

@@ -1,0 +1,48 @@
+{
+  "font": "sans",
+  "customFont": null,
+  "weight": "bold",
+  "captionLeft": "HULISSES DIAS\n@TIOHULI",
+  "captionRight": "→ MESTRE EM FINANÇAS\nANALISTA CNPI",
+  "palette": {
+    "bg": "#000000",
+    "text": "#ffffff",
+    "caption": "#ffffff"
+  },
+  "divider": {
+    "color": "#eae422",
+    "size": 13
+  },
+  "tipos": {
+    "split": {
+      "sizeStep": 4,
+      "lineHeight": 1.02,
+      "letterSpacing": -0.05,
+      "align": "center"
+    },
+    "development": {
+      "sizeStep": 4,
+      "lineHeight": 1.14,
+      "letterSpacing": -0.05,
+      "align": "left"
+    },
+    "final": {
+      "sizeStep": 2,
+      "lineHeight": 1.14,
+      "letterSpacing": -0.05,
+      "align": "left"
+    },
+    "photoTop": {
+      "sizeStep": 5,
+      "lineHeight": 1.11,
+      "letterSpacing": -0.044,
+      "align": "center"
+    },
+    "comparison": {
+      "sizeStep": 4,
+      "lineHeight": 1.02,
+      "letterSpacing": -0.05,
+      "align": "center"
+    }
+  }
+}

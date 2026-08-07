@@ -856,6 +856,7 @@ body {
   color: var(--sl-text, #fff);
   overflow: hidden;
   font-family: 'STIX Two Text', 'Times New Roman', Times, serif;
+  font-weight: var(--sl-weight, 400);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -973,6 +974,25 @@ body {
 
 .sl-split-half--bottom {
   top: 675px;
+}
+
+/* Filete entre as metades: alguns clientes usam como assinatura da marca */
+.sl-split-divider {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(675px - var(--sl-divider-size, 0px) / 2);
+  height: var(--sl-divider-size, 0px);
+  background: var(--sl-divider, transparent);
+  z-index: 3;
+}
+
+.sl-split-divider--v {
+  left: calc(540px - var(--sl-divider-size, 0px) / 2);
+  right: auto;
+  top: 0;
+  width: var(--sl-divider-size, 0px);
+  height: 1350px;
 }
 
 /* tela partida em pé: as metades viram colunas e o texto de cada uma

@@ -1,12 +1,14 @@
 import type {
   CustomFont,
+  Divider,
   FontStyle,
+  FontWeight,
   Palette,
   Project,
   Slide,
   SlideType,
 } from './types'
-import { PALETA_PADRAO } from './types'
+import { FILETE_PADRAO, PALETA_PADRAO } from './types'
 import { openDb, reqResult, STORE_ESTILOS, txDone } from './state'
 import { DEFAULT_STEPS, sizeStepsFor } from './components/SlideRenderer'
 
@@ -28,6 +30,7 @@ export interface AjustesDeTexto {
   sizeStep?: number
   lineHeight?: number
   letterSpacing?: number
+  align?: 'left' | 'center'
 }
 
 export interface EstiloUsuario {
@@ -37,6 +40,10 @@ export interface EstiloUsuario {
   captionRight: string
   /** Cores do carrossel (fundo, texto e assinaturas). */
   palette: Palette
+  /** Peso dos textos. */
+  weight: FontWeight
+  /** Filete entre as metades da tela partida. */
+  divider: Divider
   /** Ajustes de texto por tipo de slide. */
   tipos: Partial<Record<SlideType, AjustesDeTexto>>
   /** Quando foi salvo, só pra informar na tela. */
@@ -87,6 +94,10 @@ export function estiloDoProjeto(p: Project): EstiloUsuario {
       .filter((v): v is number => typeof v === 'number')
     const espaco = maisComum(espacos)
     if (espaco !== undefined) ajuste.letterSpacing = espaco
+    const alinhado = doTipo.filter((s) => s.align).length
+    if (alinhado > doTipo.length / 2) {
+      ajuste.align = doTipo.find((s) => s.align)?.align
+    }
     tipos[tipo] = ajuste
   }
   return {
@@ -95,6 +106,8 @@ export function estiloDoProjeto(p: Project): EstiloUsuario {
     captionLeft: p.captionLeft,
     captionRight: p.captionRight,
     palette: p.palette ?? PALETA_PADRAO,
+    weight: p.weight ?? 'normal',
+    divider: p.divider ?? FILETE_PADRAO,
     tipos,
     salvoEm: Date.now(),
   }
@@ -109,6 +122,8 @@ export function aplicarEstilo(p: Project, e: EstiloUsuario): Project {
     captionLeft: e.captionLeft,
     captionRight: e.captionRight,
     palette: e.palette ?? PALETA_PADRAO,
+    weight: e.weight ?? 'normal',
+    divider: e.divider ?? FILETE_PADRAO,
     slides: p.slides.map((s) => {
       const ajuste = e.tipos[s.type]
       if (!ajuste) return s
@@ -123,6 +138,7 @@ export function aplicarEstilo(p: Project, e: EstiloUsuario): Project {
       if (typeof ajuste.letterSpacing === 'number') {
         novo.letterSpacing = ajuste.letterSpacing
       }
+      if (ajuste.align) novo.align = ajuste.align
       return novo
     }),
   }
@@ -155,11 +171,12 @@ export function normalizarEstilo(bruto: unknown): EstiloUsuario | null {
       )
     }
     if (typeof src.lineHeight === 'number' && Number.isFinite(src.lineHeight)) {
-      ajuste.lineHeight = Math.min(1.6, Math.max(1.15, src.lineHeight))
+      ajuste.lineHeight = Math.min(1.6, Math.max(1.0, src.lineHeight))
     }
     if (typeof src.letterSpacing === 'number' && Number.isFinite(src.letterSpacing)) {
-      ajuste.letterSpacing = Math.min(0.06, Math.max(-0.03, src.letterSpacing))
+      ajuste.letterSpacing = Math.min(0.06, Math.max(-0.06, src.letterSpacing))
     }
+    if (src.align === 'left' || src.align === 'center') ajuste.align = src.align
     tipos[tipo] = ajuste
   }
   const cor = (v: unknown, padrao: string) =>
@@ -177,6 +194,19 @@ export function normalizarEstilo(bruto: unknown): EstiloUsuario | null {
       text: cor(bp.text, PALETA_PADRAO.text),
       caption: cor(bp.caption, PALETA_PADRAO.caption),
     },
+    weight: b.weight === 'bold' ? 'bold' : 'normal',
+    divider: {
+      color: cor((b.divider as Record<string, unknown>)?.color, FILETE_PADRAO.color),
+      size: Math.min(
+        60,
+        Math.max(
+          0,
+          typeof (b.divider as Record<string, unknown>)?.size === 'number'
+            ? ((b.divider as Record<string, number>).size as number)
+            : 0,
+        ),
+      ),
+    },
     tipos,
     salvoEm: typeof b.salvoEm === 'number' ? b.salvoEm : undefined,
   }
@@ -192,6 +222,8 @@ export function estiloPadrao(): EstiloUsuario {
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
     palette: PALETA_PADRAO,
+    weight: 'normal',
+    divider: FILETE_PADRAO,
     tipos,
   }
 }
