@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { PALETA_PADRAO } from '../types'
 import type {
   BookSlide,
   ComparisonSlide,
@@ -26,6 +27,29 @@ export type EditField = 'text' | 'body' | 'top' | 'bottom'
 
 export const SLIDE_W = 1080
 export const SLIDE_H = 1350
+
+/** Luminância aproximada: diz se uma cor é clara ou escura. */
+export function claro(cor: string): boolean {
+  const hex = cor.trim().replace('#', '')
+  const cheio =
+    hex.length === 3
+      ? hex
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : hex
+  if (!/^[0-9a-f]{6}$/i.test(cheio)) {
+    // rgb()/rgba(): tenta os três primeiros números
+    const n = cor.match(/\d+(\.\d+)?/g)
+    if (!n || n.length < 3) return true
+    const [r, g, b] = n.slice(0, 3).map(Number)
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55
+  }
+  const r = parseInt(cheio.slice(0, 2), 16)
+  const g = parseInt(cheio.slice(2, 4), 16)
+  const b = parseInt(cheio.slice(4, 6), 16)
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55
+}
 
 /** Fração da largura ocupada pela foto no slide final. */
 export const FINAL_MEDIA_FRAC = 0.44
@@ -990,9 +1014,22 @@ export function SlideRenderer({
     .filter(Boolean)
     .join(' ')
 
+  const paleta = project.palette ?? PALETA_PADRAO
+  const corDoSlide = {
+    '--sl-bg': paleta.bg,
+    '--sl-text': paleta.text,
+    '--sl-cap': paleta.caption,
+    // A sombra que protege o texto por cima da foto acompanha o texto:
+    // texto claro pede sombra escura, texto escuro pede sombra clara.
+    '--sl-scrim': claro(paleta.text) ? '0, 0, 0' : '255, 255, 255',
+  } as CSSProperties
+
   return (
     <div className="sl-scale-outer" style={outerStyle}>
-      <div className={rootClass} style={{ transform: `scale(${scale})` }}>
+      <div
+        className={rootClass}
+        style={{ ...corDoSlide, transform: `scale(${scale})` }}
+      >
         {layers}
         <Chrome project={project} />
       </div>

@@ -12,6 +12,7 @@ import type {
   SplitHalf,
   SplitSlide,
 } from './types'
+import { PALETA_PADRAO } from './types'
 import { DEFAULT_STEPS, sizeStepsFor } from './components/SlideRenderer'
 
 // Rascunho automático fica no IndexedDB: fotos de 10-13 slides estouram os
@@ -577,11 +578,21 @@ export function normalizeProject(data: unknown): Project | null {
           dataUrl: (rawFont as CustomFont).dataUrl,
         }
       : null
+  const corValida = (v: unknown, padrao: string) =>
+    typeof v === 'string' && /^(#[0-9a-f]{3,8}|rgba?\(|hsla?\()/i.test(v.trim())
+      ? v.trim()
+      : padrao
+  const paletaBruta = (p as { palette?: Record<string, unknown> }).palette ?? {}
   return {
     title:
       typeof p.title === 'string' && p.title.trim() !== ''
         ? p.title
         : 'Carrossel sem título',
+    palette: {
+      bg: corValida(paletaBruta.bg, PALETA_PADRAO.bg),
+      text: corValida(paletaBruta.text, PALETA_PADRAO.text),
+      caption: corValida(paletaBruta.caption, PALETA_PADRAO.caption),
+    },
     font:
       p.font === 'sans' ? 'sans' : p.font === 'custom' && customFont ? 'custom' : 'serif',
     customFont,

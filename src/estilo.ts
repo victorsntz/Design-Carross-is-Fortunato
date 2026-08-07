@@ -1,4 +1,12 @@
-import type { CustomFont, FontStyle, Project, Slide, SlideType } from './types'
+import type {
+  CustomFont,
+  FontStyle,
+  Palette,
+  Project,
+  Slide,
+  SlideType,
+} from './types'
+import { PALETA_PADRAO } from './types'
 import { openDb, reqResult, STORE_ESTILOS, txDone } from './state'
 import { DEFAULT_STEPS, sizeStepsFor } from './components/SlideRenderer'
 
@@ -27,6 +35,8 @@ export interface EstiloUsuario {
   customFont: CustomFont | null
   captionLeft: string
   captionRight: string
+  /** Cores do carrossel (fundo, texto e assinaturas). */
+  palette: Palette
   /** Ajustes de texto por tipo de slide. */
   tipos: Partial<Record<SlideType, AjustesDeTexto>>
   /** Quando foi salvo, só pra informar na tela. */
@@ -84,6 +94,7 @@ export function estiloDoProjeto(p: Project): EstiloUsuario {
     customFont: p.customFont,
     captionLeft: p.captionLeft,
     captionRight: p.captionRight,
+    palette: p.palette ?? PALETA_PADRAO,
     tipos,
     salvoEm: Date.now(),
   }
@@ -97,6 +108,7 @@ export function aplicarEstilo(p: Project, e: EstiloUsuario): Project {
     customFont: e.customFont,
     captionLeft: e.captionLeft,
     captionRight: e.captionRight,
+    palette: e.palette ?? PALETA_PADRAO,
     slides: p.slides.map((s) => {
       const ajuste = e.tipos[s.type]
       if (!ajuste) return s
@@ -150,11 +162,21 @@ export function normalizarEstilo(bruto: unknown): EstiloUsuario | null {
     }
     tipos[tipo] = ajuste
   }
+  const cor = (v: unknown, padrao: string) =>
+    typeof v === 'string' && /^(#[0-9a-f]{3,8}|rgba?\(|hsla?\()/i.test(v.trim())
+      ? v.trim()
+      : padrao
+  const bp = (b.palette ?? {}) as Record<string, unknown>
   return {
     font: b.font === 'sans' ? 'sans' : b.font === 'custom' && customFont ? 'custom' : 'serif',
     customFont,
     captionLeft: texto(b.captionLeft),
     captionRight: texto(b.captionRight),
+    palette: {
+      bg: cor(bp.bg, PALETA_PADRAO.bg),
+      text: cor(bp.text, PALETA_PADRAO.text),
+      caption: cor(bp.caption, PALETA_PADRAO.caption),
+    },
     tipos,
     salvoEm: typeof b.salvoEm === 'number' ? b.salvoEm : undefined,
   }
@@ -169,6 +191,7 @@ export function estiloPadrao(): EstiloUsuario {
     customFont: null,
     captionLeft: 'ESCREVA AQUI SUA\nASSINATURA DA SÉRIE',
     captionRight: 'REPITA OU VARIE\nDO OUTRO LADO',
+    palette: PALETA_PADRAO,
     tipos,
   }
 }

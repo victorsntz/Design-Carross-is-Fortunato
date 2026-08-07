@@ -108,6 +108,22 @@ export interface CustomFont {
   dataUrl: string
 }
 
+/** Cores do carrossel — o que muda de cliente pra cliente na mesma arte. */
+export interface Palette {
+  /** Fundo do slide. */
+  bg: string
+  /** Cor dos textos. */
+  text: string
+  /** Cor das assinaturas do topo. */
+  caption: string
+}
+
+export const PALETA_PADRAO: Palette = {
+  bg: '#0b0b0b',
+  text: '#ffffff',
+  caption: '#f2f2f2',
+}
+
 export interface Project {
   /** Nome do carrossel, mostrado na lista "Meus carrosséis". */
   title: string
@@ -118,5 +134,7 @@ export interface Project {
   captionLeft: string
   /** Assinatura pequena no topo direito de todos os slides. */
   captionRight: string
+  /** Sem valor = a paleta padrão (fundo quase preto, texto branco). */
+  palette?: Palette
   slides: Slide[]
 }

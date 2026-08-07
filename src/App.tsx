@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { PALETA_PADRAO } from './types'
 import type {
   ComparisonSlide,
   Project,
   Slide,
   SlideMedia,
+  Palette,
   SlideType,
   SplitOrientation,
   SplitSlide,
@@ -1507,6 +1509,47 @@ export default function App() {
                 onValueChange={(v) => setProject((p) => ({ ...p, captionRight: v }))}
               />
             </label>
+          </section>
+
+          <section className="card">
+            <h2 className="card-title">Cores</h2>
+            {(
+              [
+                ['bg', 'Fundo do slide'],
+                ['text', 'Cor do texto'],
+                ['caption', 'Assinaturas do topo'],
+              ] as const
+            ).map(([chave, rotulo]) => (
+              <div className="control-row" key={chave}>
+                <span className="control-label">{rotulo}</span>
+                <input
+                  type="color"
+                  className="color-input"
+                  aria-label={rotulo}
+                  value={(project.palette ?? PALETA_PADRAO)[chave]}
+                  onChange={(e) =>
+                    setProject((p) => ({
+                      ...p,
+                      palette: {
+                        ...(p.palette ?? PALETA_PADRAO),
+                        [chave]: e.target.value,
+                      } as Palette,
+                    }))
+                  }
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              className="btn btn--small"
+              onClick={() => setProject((p) => ({ ...p, palette: PALETA_PADRAO }))}
+            >
+              Voltar ao preto e branco
+            </button>
+            <p className="hint">
+              A sombra que protege o texto por cima das fotos se ajusta
+              sozinha à cor do texto.
+            </p>
           </section>
 
           <section className="card card--import">

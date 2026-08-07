@@ -268,7 +268,7 @@ export async function exportSlideVideo(
   if (!ctx) throw new Error('Canvas 2D indisponível')
 
   const drawFrame = () => {
-    ctx.fillStyle = '#0b0b0b'
+    ctx.fillStyle = project.palette?.bg ?? '#0b0b0b'
     ctx.fillRect(0, 0, SLIDE_W, SLIDE_H)
     for (const d of drawables) drawCover(ctx, d)
     ctx.drawImage(overlay, 0, 0, SLIDE_W, SLIDE_H)
