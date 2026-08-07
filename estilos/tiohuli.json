@@ -44,5 +44,17 @@
       "letterSpacing": -0.05,
       "align": "center"
     }
-  }
+  },
+  "sequencia": [
+    "split",
+    "split",
+    "split",
+    "final",
+    "development",
+    "photoTop",
+    "final",
+    "development",
+    "final",
+    "photoTop"
+  ]
 }
