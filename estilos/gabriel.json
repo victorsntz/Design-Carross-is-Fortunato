@@ -17,12 +17,12 @@
     "split",
     "split",
     "split",
-    "split",
     "final",
-    "development",
     "photoTop",
     "photoTop",
-    "development",
+    "final",
+    "photoTop",
+    "photoTop",
     "photoTop"
   ],
   "tipos": {
@@ -40,7 +40,7 @@
     },
     "final": {
       "sizeStep": 1,
-      "lineHeight": 1.08,
+      "lineHeight": 1.11,
       "letterSpacing": -0.05,
       "align": "left"
     },
@@ -51,8 +51,8 @@
       "align": "left"
     },
     "photoTop": {
-      "sizeStep": 4,
-      "lineHeight": 1.06,
+      "sizeStep": 2,
+      "lineHeight": 1.18,
       "letterSpacing": -0.05,
       "align": "left"
     }
