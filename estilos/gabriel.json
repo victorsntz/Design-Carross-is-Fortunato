@@ -28,32 +28,32 @@
   "tipos": {
     "split": {
       "sizeStep": 6,
-      "lineHeight": 1.07,
-      "letterSpacing": -0.025,
+      "lineHeight": 1.02,
+      "letterSpacing": -0.05,
       "align": "center"
     },
     "comparison": {
       "sizeStep": 4,
-      "lineHeight": 1.07,
-      "letterSpacing": -0.025,
+      "lineHeight": 1.02,
+      "letterSpacing": -0.05,
       "align": "center"
     },
     "final": {
       "sizeStep": 1,
-      "lineHeight": 1.09,
-      "letterSpacing": -0.06,
+      "lineHeight": 1.08,
+      "letterSpacing": -0.05,
       "align": "left"
     },
     "development": {
       "sizeStep": 3,
-      "lineHeight": 1.21,
-      "letterSpacing": 0,
+      "lineHeight": 1.16,
+      "letterSpacing": -0.05,
       "align": "left"
     },
     "photoTop": {
-      "sizeStep": 3,
-      "lineHeight": 1.21,
-      "letterSpacing": -0.02,
+      "sizeStep": 4,
+      "lineHeight": 1.06,
+      "letterSpacing": -0.05,
       "align": "left"
     }
   }
