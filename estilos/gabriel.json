@@ -1,0 +1,60 @@
+{
+  "font": "sans",
+  "customFont": null,
+  "weight": "bold",
+  "captionLeft": "GABRIEL BUSSIKI\n@GABRIELBUSSIKI_",
+  "captionRight": "→ AGRO, EXPORTAÇÃO\nE INVESTIMENTOS",
+  "palette": {
+    "bg": "#000000",
+    "text": "#ffffff",
+    "caption": "#ffffff"
+  },
+  "divider": {
+    "color": "#2e8e16",
+    "size": 13
+  },
+  "sequencia": [
+    "split",
+    "split",
+    "split",
+    "split",
+    "final",
+    "development",
+    "photoTop",
+    "photoTop",
+    "development",
+    "photoTop"
+  ],
+  "tipos": {
+    "split": {
+      "sizeStep": 6,
+      "lineHeight": 1.07,
+      "letterSpacing": -0.025,
+      "align": "center"
+    },
+    "comparison": {
+      "sizeStep": 4,
+      "lineHeight": 1.07,
+      "letterSpacing": -0.025,
+      "align": "center"
+    },
+    "final": {
+      "sizeStep": 1,
+      "lineHeight": 1.09,
+      "letterSpacing": -0.06,
+      "align": "left"
+    },
+    "development": {
+      "sizeStep": 3,
+      "lineHeight": 1.21,
+      "letterSpacing": 0,
+      "align": "left"
+    },
+    "photoTop": {
+      "sizeStep": 3,
+      "lineHeight": 1.21,
+      "letterSpacing": -0.02,
+      "align": "left"
+    }
+  }
+}
