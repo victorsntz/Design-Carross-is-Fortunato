@@ -107,7 +107,13 @@ export type FontStyle = 'serif' | 'sans' | 'custom'
 /** Arquivo de fonte enviado pela pessoa (TTF/OTF/WOFF), guardado no projeto. */
 export interface CustomFont {
   name: string
+  /** O arquivo do peso normal. */
   dataUrl: string
+  /**
+   * O arquivo do negrito, quando a pessoa tem os dois. Sem isso o navegador
+   * engrossa o normal por conta própria, e o desenho da letra sai errado.
+   */
+  boldDataUrl?: string
 }
 
 /** Cores do carrossel — o que muda de cliente pra cliente na mesma arte. */

@@ -656,7 +656,13 @@ export default function App() {
     }
     const el = existing ?? document.createElement('style')
     el.id = id
-    el.textContent = `@font-face { font-family: 'FontePersonalizada'; src: url(${project.customFont.dataUrl}); font-display: swap; }`
+    const face = (url: string, peso: number) =>
+      `@font-face { font-family: 'FontePersonalizada'; src: url(${url}); font-weight: ${peso}; font-display: swap; }`
+    // Quando vem o arquivo do negrito, cada peso ganha o seu desenho de verdade
+    // em vez de o navegador engrossar o normal.
+    el.textContent = project.customFont.boldDataUrl
+      ? face(project.customFont.dataUrl, 400) + face(project.customFont.boldDataUrl, 700)
+      : face(project.customFont.dataUrl, 400)
     if (!existing) document.head.appendChild(el)
   }, [project.customFont])
 

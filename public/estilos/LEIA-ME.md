@@ -26,7 +26,11 @@ Dois caminhos:
 ```json
 {
   "font": "serif | sans | custom",
-  "customFont": { "name": "Nome da fonte", "dataUrl": "data:font/..." },
+  "customFont": {
+    "name": "Nome da fonte",
+    "dataUrl": "data:font/woff2;base64,...",
+    "boldDataUrl": "data:font/woff2;base64,..."
+  },
   "captionLeft": "ASSINATURA\nDA ESQUERDA",
   "captionRight": "ASSINATURA\nDA DIREITA",
   "palette": { "bg": "#0b0b0b", "text": "#ffffff", "caption": "#f2f2f2" },
@@ -38,6 +42,11 @@ Dois caminhos:
   }
 }
 ```
+
+Com `font: "custom"`, a fonte do cliente vai embutida no próprio arquivo,
+em base64. `boldDataUrl` é opcional, mas sem ele o navegador engrossa o peso
+normal por conta própria e o desenho da letra sai errado — vale mandar os
+dois arquivos sempre que existirem.
 
 Tudo é opcional: o que faltar fica no padrão da casa. `sizeStep` conta de 0
 (menor) até o máximo do tipo; `lineHeight` vai de 1.0 a 1.6;

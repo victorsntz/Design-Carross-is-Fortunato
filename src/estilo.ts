@@ -162,7 +162,14 @@ export function normalizarEstilo(bruto: unknown): EstiloUsuario | null {
     fonte !== null &&
     typeof fonte.dataUrl === 'string' &&
     fonte.dataUrl.startsWith('data:')
-      ? { name: texto(fonte.name) || 'Minha fonte', dataUrl: fonte.dataUrl }
+      ? {
+          name: texto(fonte.name) || 'Minha fonte',
+          dataUrl: fonte.dataUrl,
+          ...(typeof fonte.boldDataUrl === 'string' &&
+          fonte.boldDataUrl.startsWith('data:')
+            ? { boldDataUrl: fonte.boldDataUrl }
+            : {}),
+        }
       : null
   const tipos: Partial<Record<SlideType, AjustesDeTexto>> = {}
   const brutoTipos = (b.tipos ?? {}) as Record<string, unknown>
