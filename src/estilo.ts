@@ -131,24 +131,27 @@ export function aplicarEstilo(p: Project, e: EstiloUsuario): Project {
     palette: e.palette ?? PALETA_PADRAO,
     weight: e.weight ?? 'normal',
     divider: e.divider ?? FILETE_PADRAO,
-    slides: p.slides.map((s) => {
-      const ajuste = e.tipos[s.type]
-      if (!ajuste) return s
-      const novo = { ...s } as Slide
-      if (typeof ajuste.sizeStep === 'number') {
-        novo.sizeStep = Math.min(
-          Math.max(0, Math.round(ajuste.sizeStep)),
-          sizeStepsFor(s.type) - 1,
-        )
-      }
-      if (typeof ajuste.lineHeight === 'number') novo.lineHeight = ajuste.lineHeight
-      if (typeof ajuste.letterSpacing === 'number') {
-        novo.letterSpacing = ajuste.letterSpacing
-      }
-      if (ajuste.align) novo.align = ajuste.align
-      return novo
-    }),
+    slides: p.slides.map((s) => aplicarEstiloNoSlide(s, e)),
   }
+}
+
+/** Os ajustes de texto que o padrão manda pra um slide daquele tipo. */
+export function aplicarEstiloNoSlide(s: Slide, e: EstiloUsuario): Slide {
+  const ajuste = e.tipos[s.type]
+  if (!ajuste) return s
+  const novo = { ...s } as Slide
+  if (typeof ajuste.sizeStep === 'number') {
+    novo.sizeStep = Math.min(
+      Math.max(0, Math.round(ajuste.sizeStep)),
+      sizeStepsFor(s.type) - 1,
+    )
+  }
+  if (typeof ajuste.lineHeight === 'number') novo.lineHeight = ajuste.lineHeight
+  if (typeof ajuste.letterSpacing === 'number') {
+    novo.letterSpacing = ajuste.letterSpacing
+  }
+  if (ajuste.align) novo.align = ajuste.align
+  return novo
 }
 
 /** Confere um padrão vindo de arquivo antes de deixar entrar. */

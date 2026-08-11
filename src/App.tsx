@@ -34,6 +34,7 @@ import {
   saveProjectToStorage,
   type ProjectSummary,
 } from './state'
+import { converterSlide } from './converter'
 import { clipboardToMedia, fileToMedia } from './media'
 import { lerMarkdown, MODELO_MD } from './md'
 import {
@@ -44,6 +45,7 @@ import {
 } from './Gate'
 import {
   aplicarEstilo,
+  aplicarEstiloNoSlide,
   estiloAtual,
   estiloDoProjeto,
   listarClientes,
@@ -810,6 +812,23 @@ export default function App() {
       return { ...p, slides }
     })
     setSelectedId(copy.id)
+  }
+
+  /**
+   * Troca o tipo do slide no lugar: o texto e as fotos vão junto, e os
+   * ajustes de tamanho saem do padrão do cliente pro tipo novo.
+   */
+  function trocarTipo(id: string, type: SlideType, orientation?: SplitOrientation) {
+    lastEditRef.current = 0 // a troca sempre vira um passo de "Desfazer"
+    setProject((p) => ({
+      ...p,
+      slides: p.slides.map((s) => {
+        if (s.id !== id) return s
+        const novo = converterSlide(s, type, orientation)
+        const e = estiloRef.current
+        return e ? aplicarEstiloNoSlide(novo, e) : novo
+      }),
+    }))
   }
 
   function moveSlide(id: string, delta: -1 | 1) {
@@ -2161,6 +2180,38 @@ export default function App() {
                     </div>
                   </div>
                 )}
+                <div className="control-row">
+                  <span className="control-label">Trocar o tipo</span>
+                </div>
+                <p className="hint">
+                  O texto e as fotos que já estão aqui vão junto — não precisa
+                  criar outro slide e copiar tudo na mão.
+                </p>
+                {ADD_OPTIONS.map((opt) => {
+                  const atual =
+                    selected.type === opt.type &&
+                    (opt.type !== 'split' ||
+                      ((selected as SplitSlide).orientation ?? 'horizontal') ===
+                        (opt.orientation ?? 'horizontal'))
+                  return (
+                    <button
+                      key={`troca-${opt.type}-${opt.orientation ?? 'h'}`}
+                      type="button"
+                      className={
+                        atual ? 'btn btn--full btn--add btn--add-atual' : 'btn btn--full btn--add'
+                      }
+                      style={{ borderLeft: `3px solid ${TYPE_COLOR[opt.type]}` }}
+                      disabled={atual}
+                      onClick={() => trocarTipo(selected.id, opt.type, opt.orientation)}
+                    >
+                      <TypeIcon type={opt.type} vertical={opt.orientation === 'vertical'} />
+                      <span className="btn-add-label">
+                        <span>{opt.label}</span>
+                        <small>{atual ? 'é este agora' : opt.hint}</small>
+                      </span>
+                    </button>
+                  )
+                })}
                 <div className="control-row control-row--wrap">
                   <button
                     type="button"

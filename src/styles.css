@@ -604,6 +604,17 @@ body {
   padding: 8px 12px;
 }
 
+/* O tipo que o slide já tem fica marcado e sem clique, pra ficar claro
+   que os outros são a troca e este é o de agora. */
+.btn--add-atual {
+  border-color: var(--accent, #eae422);
+  opacity: 1;
+}
+
+.btn--add-atual .btn-add-label small {
+  color: var(--accent, #eae422);
+}
+
 .type-icon {
   width: 26px;
   height: 32px;
