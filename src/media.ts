@@ -45,6 +45,34 @@ export async function clipboardToMedia(): Promise<SlideMedia> {
   )
 }
 
+/**
+ * Gira a foto 90° pra direita, de verdade: o arquivo sai virado.
+ *
+ * Podia ser só um `transform` na tela, mas aí o enquadramento, o zoom e a
+ * exportação teriam que aprender a girar também. Virando os pixels, tudo
+ * que já existe continua valendo — e o Ctrl+Z devolve a foto de antes.
+ */
+export async function girarImagem(src: string): Promise<string> {
+  const img = new Image()
+  img.src = src
+  await img.decode()
+  const canvas = document.createElement('canvas')
+  // a foto deitada fica em pé: a largura vira altura
+  canvas.width = img.naturalHeight
+  canvas.height = img.naturalWidth
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas 2D indisponível')
+  ctx.translate(canvas.width, 0)
+  ctx.rotate(Math.PI / 2)
+  ctx.drawImage(img, 0, 0)
+  // Mantém o formato que a foto já tinha: PNG guarda transparência, JPEG
+  // guarda espaço. Trocar de um pro outro aqui estragaria um dos dois.
+  const tipo = src.startsWith('data:image/png') ? 'image/png' : 'image/jpeg'
+  return tipo === 'image/png'
+    ? canvas.toDataURL('image/png')
+    : canvas.toDataURL('image/jpeg', 0.92)
+}
+
 async function resizeImageToDataUrl(file: Blob): Promise<string> {
   const url = URL.createObjectURL(file)
   try {

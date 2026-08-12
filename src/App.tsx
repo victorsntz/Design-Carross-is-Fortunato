@@ -35,7 +35,7 @@ import {
   type ProjectSummary,
 } from './state'
 import { converterSlide } from './converter'
-import { clipboardToMedia, fileToMedia } from './media'
+import { clipboardToMedia, fileToMedia, girarImagem } from './media'
 import { lerMarkdown, MODELO_MD } from './md'
 import {
   clienteAtivo,
@@ -439,9 +439,11 @@ function FileButton({
 function MediaAdjust({
   media,
   onChange,
+  onGirar,
 }: {
   media: SlideMedia
   onChange: (patch: Partial<SlideMedia>) => void
+  onGirar: () => void
 }) {
   const px = media.posX ?? 50
   const py = media.posY ?? 50
@@ -450,6 +452,19 @@ function MediaAdjust({
     <div className="media-adjust">
       <div className="control-row">
         <span className="control-label">Enquadrar</span>
+        <button
+          type="button"
+          className="btn-icon"
+          title={
+            media.kind === 'image'
+              ? 'Girar a foto 90° pra direita (clique de novo pra continuar virando)'
+              : 'Só foto: vídeo não gira por aqui'
+          }
+          disabled={media.kind !== 'image'}
+          onClick={onGirar}
+        >
+          ↻
+        </button>
         <button
           type="button"
           className="btn-icon"
@@ -913,6 +928,24 @@ export default function App() {
       }
       return s
     })
+  }
+
+  /**
+   * Gira a foto 90° pra direita. Uma foto deitada fica em pé sem precisar
+   * cortar nada — e o enquadramento acompanha a virada em vez de embaralhar.
+   */
+  async function girarMedia(id: string, slot: MediaSlot, media: SlideMedia) {
+    if (media.kind !== 'image') return
+    try {
+      const src = await girarImagem(media.src)
+      adjustMedia(id, slot, {
+        src,
+        posX: 100 - (media.posY ?? 50),
+        posY: media.posX ?? 50,
+      })
+    } catch {
+      window.alert('Não consegui girar esta foto.')
+    }
   }
 
   /**
@@ -1994,6 +2027,9 @@ export default function App() {
                     <MediaAdjust
                       media={selected.media}
                       onChange={(patch) => adjustMedia(selected.id, 'media', patch)}
+                      onGirar={() =>
+                        void girarMedia(selected.id, 'media', selected.media!)
+                      }
                     />
                   )}
                   {selectedHasVideo && (
@@ -2056,6 +2092,9 @@ export default function App() {
                           <MediaAdjust
                             media={half.media}
                             onChange={(patch) => adjustMedia(selected.id, slot, patch)}
+                            onGirar={() =>
+                              void girarMedia(selected.id, slot, half.media!)
+                            }
                           />
                         )}
                       </section>
