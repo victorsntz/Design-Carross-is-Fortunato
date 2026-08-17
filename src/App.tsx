@@ -17,6 +17,10 @@ import {
   LINE_HEIGHT_MAX,
   LINE_HEIGHT_MIN,
   letterSpacingFor,
+  textYFor,
+  TEXT_Y_MAX,
+  TEXT_Y_MIN,
+  aceitaPosicaoDeTexto,
   lineHeightFor,
   SlideRenderer,
   sizeStepsFor,
@@ -248,10 +252,43 @@ function TypoSliders({
   onChange,
 }: {
   slide: Slide
-  onChange: (patch: { lineHeight?: number; letterSpacing?: number }) => void
+  onChange: (patch: {
+    lineHeight?: number
+    letterSpacing?: number
+    textY?: number
+  }) => void
 }) {
   return (
     <>
+      {aceitaPosicaoDeTexto(slide.type) && (
+        <>
+          <div className="control-row">
+            <span className="control-label">Posição do texto</span>
+            <button
+              type="button"
+              className="btn-icon"
+              title="Voltar o texto pro lugar do desenho"
+              disabled={slide.textY === undefined}
+              onClick={() => onChange({ textY: undefined })}
+            >
+              ⟲
+            </button>
+          </div>
+          <div className="slider-row">
+            <span>Cima</span>
+            <input
+              type="range"
+              min={TEXT_Y_MIN}
+              max={TEXT_Y_MAX}
+              step={1}
+              value={textYFor(slide)}
+              aria-label="Posição do texto"
+              onChange={(e) => onChange({ textY: Number(e.target.value) })}
+            />
+            <span>Baixo</span>
+          </div>
+        </>
+      )}
       <div className="control-row">
         <span className="control-label">Altura da linha</span>
       </div>
@@ -1074,7 +1111,7 @@ export default function App() {
       let bad = false
       // scrollHeight não enxerga estouro pra CIMA (bloco ancorado embaixo):
       // compara os limites dos filhos com os do contêiner.
-      root.querySelectorAll('.sl-dev, .sl-book').forEach((el) => {
+      root.querySelectorAll('.sl-dev, .sl-book, .sl-final-text, .sl-pt-text').forEach((el) => {
         const c = el.getBoundingClientRect()
         for (const child of Array.from(el.children)) {
           const r = child.getBoundingClientRect()
@@ -1094,9 +1131,6 @@ export default function App() {
         container.getBoundingClientRect().height * 0.5
       root.querySelectorAll('.sl-comp-text').forEach((el) => {
         if (!within(el, root) || coversTooMuch(el, root)) bad = true
-      })
-      root.querySelectorAll('.sl-final-text').forEach((el) => {
-        if (!within(el, root)) bad = true
       })
       root.querySelectorAll('.sl-split-text').forEach((el) => {
         const half = el.parentElement

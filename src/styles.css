@@ -1377,8 +1377,10 @@ body {
   position: absolute;
   left: 90px;
   width: 480px;
-  top: 50%;
-  transform: translateY(-50%);
+  /* A caixa vai de 120 a 1230: centralizada, cai nos mesmos 50% de antes,
+     e agora tem folga em cima e embaixo pra o texto deslizar. */
+  top: 120px;
+  bottom: 120px;
   text-align: left;
   color: var(--sl-text, #fff);
   line-height: 1.32;
@@ -1440,6 +1442,33 @@ body {
 .sl-pt-text p:first-child:has(.sl-big) {
   margin-bottom: 0.62em;
   line-height: 1.2;
+}
+
+/* ===== Onde o texto se apoia dentro da caixa ===== */
+
+/* Duas folgas invisíveis, uma antes e outra depois do texto, dividem o
+   espaço que sobra na caixa. --sl-ty em 0 encosta em cima, 100 no rodapé,
+   50 centraliza. Quando o texto é maior que a caixa as duas somem e ele
+   transborda pra baixo, que é onde o aviso de estouro já olha. */
+.sl-dev,
+.sl-final-text,
+.sl-pt-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.sl-dev::before,
+.sl-final-text::before,
+.sl-pt-text::before {
+  content: '';
+  flex: var(--sl-ty, 0) 1 0;
+}
+
+.sl-dev::after,
+.sl-final-text::after,
+.sl-pt-text::after {
+  content: '';
+  flex: calc(100 - var(--sl-ty, 0)) 1 0;
 }
 
 /* ===== Edição direta no slide + frase maior ===== */

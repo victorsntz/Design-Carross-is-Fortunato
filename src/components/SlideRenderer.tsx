@@ -114,6 +114,33 @@ export function letterSpacingFor(slide: Slide): number {
   return Math.min(LETTER_SPACING_MAX, Math.max(LETTER_SPACING_MIN, v))
 }
 
+// Onde cada tipo apoia o texto por padrão — os mesmos lugares de sempre,
+// pra que nenhum carrossel já feito mude de cara.
+const DEFAULT_TEXT_Y: Record<Slide['type'], number> = {
+  split: 100,
+  comparison: 100,
+  development: 100,
+  book: 50,
+  final: 50,
+  photoTop: 0,
+}
+
+export const TEXT_Y_MIN = 0
+export const TEXT_Y_MAX = 100
+
+/** Os tipos onde a caixa de texto tem folga pra deslizar. */
+export function aceitaPosicaoDeTexto(type: Slide['type']): boolean {
+  return type === 'development' || type === 'final' || type === 'photoTop'
+}
+
+export function textYFor(slide: Slide): number {
+  const v = slide.textY
+  if (typeof v === 'number') {
+    return Math.min(TEXT_Y_MAX, Math.max(TEXT_Y_MIN, v))
+  }
+  return DEFAULT_TEXT_Y[slide.type]
+}
+
 /** Alinhamento do texto: o do slide vence o padrão do tipo. */
 export function alignFor(slide: Slide): 'left' | 'center' | undefined {
   return slide.align
@@ -127,7 +154,10 @@ export function slideTextStyle(slide: Slide): CSSProperties {
     lineHeight: lineHeightFor(slide),
     letterSpacing: `${letterSpacingFor(slide)}em`,
     ...(align ? { textAlign: align } : {}),
-  }
+    // As folgas de cima e de baixo da caixa dividem o espaço que sobra
+    // nesta proporção (ver .sl-dev/.sl-final-text/.sl-pt-text no CSS).
+    '--sl-ty': textYFor(slide),
+  } as CSSProperties
 }
 
 /**

@@ -31,6 +31,8 @@ export interface AjustesDeTexto {
   lineHeight?: number
   letterSpacing?: number
   align?: 'left' | 'center'
+  /** Onde o texto se apoia na caixa: 0 topo, 50 meio, 100 rodapé. */
+  textY?: number
 }
 
 export interface EstiloUsuario {
@@ -99,6 +101,11 @@ export function estiloDoProjeto(p: Project): EstiloUsuario {
       .filter((v): v is number => typeof v === 'number')
     const espaco = maisComum(espacos)
     if (espaco !== undefined) ajuste.letterSpacing = espaco
+    const alturasY = doTipo
+      .map((s) => s.textY)
+      .filter((v): v is number => typeof v === 'number')
+    const alturaY = maisComum(alturasY)
+    if (alturaY !== undefined) ajuste.textY = alturaY
     const alinhado = doTipo.filter((s) => s.align).length
     if (alinhado > doTipo.length / 2) {
       ajuste.align = doTipo.find((s) => s.align)?.align
@@ -150,6 +157,7 @@ export function aplicarEstiloNoSlide(s: Slide, e: EstiloUsuario): Slide {
   if (typeof ajuste.letterSpacing === 'number') {
     novo.letterSpacing = ajuste.letterSpacing
   }
+  if (typeof ajuste.textY === 'number') novo.textY = ajuste.textY
   if (ajuste.align) novo.align = ajuste.align
   return novo
 }
@@ -192,6 +200,9 @@ export function normalizarEstilo(bruto: unknown): EstiloUsuario | null {
     }
     if (typeof src.letterSpacing === 'number' && Number.isFinite(src.letterSpacing)) {
       ajuste.letterSpacing = Math.min(0.06, Math.max(-0.06, src.letterSpacing))
+    }
+    if (typeof src.textY === 'number' && Number.isFinite(src.textY)) {
+      ajuste.textY = Math.min(100, Math.max(0, Math.round(src.textY)))
     }
     if (src.align === 'left' || src.align === 'center') ajuste.align = src.align
     tipos[tipo] = ajuste

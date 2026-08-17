@@ -31,6 +31,12 @@ interface BaseSlide {
   letterSpacing?: number
   /** Alinhamento do texto. Sem valor = o padrão do tipo. */
   align?: 'left' | 'center'
+  /**
+   * Onde o texto se apoia dentro da caixa dele: 0 encosta no topo, 100 no
+   * rodapé, 50 centraliza. Sem valor = o lugar que o desenho do tipo dá.
+   * Vale nos três Desenvolvimentos, que são os que têm caixa com folga.
+   */
+  textY?: number
 }
 
 /** Metade de uma tela partida: foto/vídeo + frase curta. */
