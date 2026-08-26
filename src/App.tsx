@@ -1368,6 +1368,28 @@ export default function App() {
     )
   }
 
+  /**
+   * Guarda só as assinaturas no padrão do cliente. Mexer em cor, fonte ou
+   * tamanho de texto sem querer é o risco de salvar o padrão inteiro só
+   * pra fixar o nome do topo — aqui as outras coisas ficam como estavam.
+   */
+  const [assinaturasSalvas, setAssinaturasSalvas] = useState(false)
+  async function salvarAssinaturas() {
+    const base = estiloRef.current ?? estiloDoProjeto(projectRef.current)
+    const novo: EstiloUsuario = {
+      ...base,
+      captionLeft: projectRef.current.captionLeft,
+      captionRight: projectRef.current.captionRight,
+    }
+    if (!(await salvarEstilo(usuario, novo))) {
+      window.alert('Não consegui salvar as assinaturas neste navegador.')
+      return
+    }
+    setEstilo(novo)
+    setAssinaturasSalvas(true)
+    window.setTimeout(() => setAssinaturasSalvas(false), 3000)
+  }
+
   /** Veste o carrossel aberto com o padrão salvo. */
   function aplicarPadraoAqui() {
     const e = estiloRef.current
@@ -1775,6 +1797,18 @@ export default function App() {
                 onValueChange={(v) => setProject((p) => ({ ...p, captionRight: v }))}
               />
             </label>
+            <button
+              type="button"
+              className="btn btn--small btn--full"
+              onClick={() => void salvarAssinaturas()}
+            >
+              {assinaturasSalvas ? 'Salvo ✓' : 'Salvar estas assinaturas'}
+            </button>
+            <p className="hint">
+              {assinaturasSalvas
+                ? `Todo carrossel novo de "${usuario}" já nasce com estas duas linhas.`
+                : 'Fixa as duas linhas no padrão deste cliente, sem mexer em cor, fonte nem tamanho de texto.'}
+            </p>
           </section>
 
           <section className="card">
