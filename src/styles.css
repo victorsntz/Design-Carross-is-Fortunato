@@ -295,9 +295,14 @@ body {
   position: relative;
 }
 
+/* Abre espaço pro × não encostar no "Abrir →" */
+.central-lista li:has(.central-tirar) .central-item {
+  padding-right: 34px;
+}
+
 .central-tirar {
   position: absolute;
-  right: -6px;
+  right: 2px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
