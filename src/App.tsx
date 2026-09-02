@@ -21,6 +21,7 @@ import {
   TEXT_Y_MAX,
   TEXT_Y_MIN,
   aceitaPosicaoDeTexto,
+  alignFor,
   lineHeightFor,
   SlideRenderer,
   sizeStepsFor,
@@ -52,7 +53,9 @@ import {
   aplicarEstiloNoSlide,
   estiloAtual,
   estiloDoProjeto,
+  criarClienteLocal,
   listarClientes,
+  removerClienteLocal,
   normalizarEstilo,
   salvarEstilo,
   type ClienteDoEstudio,
@@ -174,13 +177,18 @@ function MenuDeClientes({
   clientes,
   carregando,
   onEscolher,
+  onCriar,
+  onRemover,
   onSair,
 }: {
   clientes: ClienteDoEstudio[]
   carregando: boolean
   onEscolher: (id: string) => void
+  onCriar: (nome: string) => void
+  onRemover: (id: string) => void
   onSair: () => void
 }) {
+  const [novo, setNovo] = useState('')
   return (
     <div className="central">
       <div className="central-box">
@@ -222,22 +230,71 @@ function MenuDeClientes({
                     <span className="central-nome">
                       {c.nome}
                       <small>
-                        {c.temPadrao ? 'estética própria' : 'padrão da casa'}
+                        {c.local
+                          ? c.temPadrao
+                            ? 'criado aqui · estética própria'
+                            : 'criado aqui · sem login ainda'
+                          : c.temPadrao
+                            ? 'estética própria'
+                            : 'padrão da casa'}
                       </small>
                     </span>
                     <span className="central-abrir">Abrir →</span>
                   </button>
+                  {c.local && (
+                    <button
+                      type="button"
+                      className="central-tirar"
+                      title={`Tirar "${c.nome}" da lista (os carrosséis dele continuam salvos)`}
+                      onClick={() => onRemover(c.id)}
+                    >
+                      ×
+                    </button>
+                  )}
                 </li>
               )
             })}
           </ul>
         )}
+        <form
+          className="central-novo"
+          onSubmit={(e) => {
+            e.preventDefault()
+            onCriar(novo)
+            setNovo('')
+          }}
+        >
+          <input
+            type="text"
+            value={novo}
+            placeholder="Nome do cliente novo"
+            aria-label="Nome do cliente novo"
+            onChange={(e) => setNovo(e.target.value)}
+          />
+          <button
+            type="submit"
+            className="btn btn--small btn--primary"
+            disabled={novo.trim() === ''}
+          >
+            + Adicionar cliente
+          </button>
+        </form>
+        <p className="central-nota">
+          O cliente novo já abre com carrossel separado e padrão próprio. O
+          login dele só passa a existir quando o padrão for publicado junto do
+          site — até lá, quem entra é o estúdio, por aqui.
+        </p>
         <button type="button" className="btn btn--small central-sair" onClick={onSair}>
           Sair da conta
         </button>
       </div>
     </div>
   )
+}
+
+/** O alinhamento que o desenho de cada tipo já usa, quando o slide não diz. */
+function padraoDeAlinhamento(type: SlideType): 'left' | 'center' {
+  return type === 'split' || type === 'comparison' ? 'center' : 'left'
 }
 
 /** Onde uma mídia entra num slide: no espaço único ou numa das metades. */
@@ -256,10 +313,33 @@ function TypoSliders({
     lineHeight?: number
     letterSpacing?: number
     textY?: number
+    align?: 'left' | 'center' | 'right'
   }) => void
 }) {
+  const alinhamento = alignFor(slide) ?? padraoDeAlinhamento(slide.type)
   return (
     <>
+      <div className="control-row">
+        <span className="control-label">Alinhamento</span>
+        <div className="segmented">
+          {(
+            [
+              ['left', 'Esquerda'],
+              ['center', 'Centro'],
+              ['right', 'Direita'],
+            ] as const
+          ).map(([modo, rotulo]) => (
+            <button
+              key={modo}
+              type="button"
+              className={alinhamento === modo ? 'seg seg--active' : 'seg'}
+              onClick={() => onChange({ align: modo })}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </div>
+      </div>
       {aceitaPosicaoDeTexto(slide.type) && (
         <>
           <div className="control-row">
@@ -1390,6 +1470,36 @@ export default function App() {
     window.setTimeout(() => setAssinaturasSalvas(false), 3000)
   }
 
+  /**
+   * Guarda a tipografia deste slide como padrão do tipo dele. É o caminho
+   * curto pra "aumentei a fonte e apertei a entrelinha, quero assim sempre":
+   * pega o que está na tela e fixa só pra esse tipo, sem tocar nos outros.
+   */
+  const [tipoSalvo, setTipoSalvo] = useState('')
+  async function salvarAjustesDoTipo(slide: Slide) {
+    const base = estiloRef.current ?? estiloDoProjeto(projectRef.current)
+    const novo: EstiloUsuario = {
+      ...base,
+      tipos: {
+        ...base.tipos,
+        [slide.type]: {
+          sizeStep: slide.sizeStep,
+          lineHeight: lineHeightFor(slide),
+          letterSpacing: letterSpacingFor(slide),
+          align: alignFor(slide) ?? padraoDeAlinhamento(slide.type),
+          ...(slide.textY !== undefined ? { textY: slide.textY } : {}),
+        },
+      },
+    }
+    if (!(await salvarEstilo(usuario, novo))) {
+      window.alert('Não consegui salvar este ajuste neste navegador.')
+      return
+    }
+    setEstilo(novo)
+    setTipoSalvo(slide.type)
+    window.setTimeout(() => setTipoSalvo(''), 3000)
+  }
+
   /** Veste o carrossel aberto com o padrão salvo. */
   function aplicarPadraoAqui() {
     const e = estiloRef.current
@@ -1573,6 +1683,19 @@ export default function App() {
           definirClienteAtivo(id)
           // Recarrega pra abrir limpo já na estética do cliente
           window.location.reload()
+        }}
+        onCriar={(nome) => {
+          const c = criarClienteLocal(nome)
+          if (!c) {
+            window.alert('Escreva um nome com pelo menos uma letra ou número.')
+            return
+          }
+          definirClienteAtivo(c.id)
+          window.location.reload()
+        }}
+        onRemover={(id) => {
+          removerClienteLocal(id)
+          void listarClientes().then(setClientes)
         }}
         onSair={() => {
           localStorage.removeItem('criador-acesso')
@@ -2214,6 +2337,20 @@ export default function App() {
                     updateSlide(selected.id, (s) => ({ ...s, ...patch }))
                   }
                 />
+                <button
+                  type="button"
+                  className="btn btn--small btn--full"
+                  onClick={() => void salvarAjustesDoTipo(selected)}
+                >
+                  {tipoSalvo === selected.type
+                    ? 'Salvo ✓'
+                    : `Salvar isto como padrão de ${TYPE_LABEL[selected.type]}`}
+                </button>
+                <p className="hint">
+                  {tipoSalvo === selected.type
+                    ? `Todo ${TYPE_LABEL[selected.type]} novo de "${usuario}" já nasce com estes ajustes.`
+                    : 'Tamanho, altura da linha, espaço entre letras, alinhamento e posição — só deste tipo de slide.'}
+                </p>
               </section>
 
               <section className="card">

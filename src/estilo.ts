@@ -30,7 +30,7 @@ export interface AjustesDeTexto {
   sizeStep?: number
   lineHeight?: number
   letterSpacing?: number
-  align?: 'left' | 'center'
+  align?: 'left' | 'center' | 'right'
   /** Onde o texto se apoia na caixa: 0 topo, 50 meio, 100 rodapé. */
   textY?: number
 }
@@ -204,7 +204,9 @@ export function normalizarEstilo(bruto: unknown): EstiloUsuario | null {
     if (typeof src.textY === 'number' && Number.isFinite(src.textY)) {
       ajuste.textY = Math.min(100, Math.max(0, Math.round(src.textY)))
     }
-    if (src.align === 'left' || src.align === 'center') ajuste.align = src.align
+    if (src.align === 'left' || src.align === 'center' || src.align === 'right') {
+      ajuste.align = src.align
+    }
     tipos[tipo] = ajuste
   }
   const cor = (v: unknown, padrao: string) =>
@@ -318,12 +320,76 @@ export interface ClienteDoEstudio {
   palette?: Palette
   /** true quando existe um padrão publicado pra ele. */
   temPadrao?: boolean
+  /** true quando foi criado aqui na Central e ainda não tem login publicado. */
+  local?: boolean
 }
 
 /**
  * Lista de clientes do estúdio, publicada em estilos/index.json. É o que
  * alimenta o menu de quem entra com a conta do estúdio.
  */
+/**
+ * Clientes criados aqui na Central, guardados neste navegador.
+ *
+ * O login de cada cliente vive num arquivo publicado junto do site, que só
+ * a gente atualiza. Um cliente novo criado aqui já dá pra trabalhar — tem
+ * carrossel separado e padrão próprio — mas quem abre ele é o estúdio,
+ * pela Central, até o login dele existir de verdade.
+ */
+const CHAVE_LOCAIS = 'criador-clientes-locais'
+
+export function listarClientesLocais(): ClienteDoEstudio[] {
+  try {
+    const bruto: unknown = JSON.parse(localStorage.getItem(CHAVE_LOCAIS) ?? '[]')
+    if (!Array.isArray(bruto)) return []
+    return bruto.filter(
+      (c): c is ClienteDoEstudio =>
+        typeof c === 'object' &&
+        c !== null &&
+        typeof (c as ClienteDoEstudio).id === 'string' &&
+        typeof (c as ClienteDoEstudio).nome === 'string',
+    )
+  } catch {
+    return []
+  }
+}
+
+/** Vira "Maria Silva" em "mariasilva": o mesmo formato dos ids publicados. */
+function idDoNome(nome: string): string {
+  return nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 32)
+}
+
+export function criarClienteLocal(nome: string): ClienteDoEstudio | null {
+  const limpo = nome.trim()
+  const id = idDoNome(limpo)
+  if (limpo === '' || id === '') return null
+  const novo: ClienteDoEstudio = { id, nome: limpo, local: true }
+  const lista = listarClientesLocais().filter((c) => c.id !== id)
+  lista.push(novo)
+  try {
+    localStorage.setItem(CHAVE_LOCAIS, JSON.stringify(lista))
+  } catch {
+    return null
+  }
+  return novo
+}
+
+export function removerClienteLocal(id: string): void {
+  try {
+    localStorage.setItem(
+      CHAVE_LOCAIS,
+      JSON.stringify(listarClientesLocais().filter((c) => c.id !== id)),
+    )
+  } catch {
+    /* navegador sem espaço: fica como estava */
+  }
+}
+
 export async function listarClientes(): Promise<ClienteDoEstudio[]> {
   try {
     const r = await fetch(`${import.meta.env.BASE_URL}estilos/index.json`, {
@@ -340,15 +406,33 @@ export async function listarClientes(): Promise<ClienteDoEstudio[]> {
         typeof (c as ClienteDoEstudio).nome === 'string',
     )
     // Busca o padrão de cada um só pra mostrar as cores na amostra
-    return Promise.all(
+    const publicados = await Promise.all(
       lista.map(async (c) => {
         const e = await buscarEstiloPublicado(c.id)
         return { ...c, palette: e?.palette, temPadrao: e !== null }
       }),
     )
+    return juntarComOsLocais(publicados)
   } catch {
-    return []
+    return juntarComOsLocais([])
   }
+}
+
+/** Os criados aqui entram no fim da lista, sem repetir os publicados. */
+async function juntarComOsLocais(
+  publicados: ClienteDoEstudio[],
+): Promise<ClienteDoEstudio[]> {
+  const jaTem = new Set(publicados.map((c) => c.id))
+  const locais = await Promise.all(
+    listarClientesLocais()
+      .filter((c) => !jaTem.has(c.id))
+      .map(async (c) => {
+        // A amostra de cor vem do padrão que a pessoa já salvou pra ele
+        const e = await lerEstiloSalvo(c.id)
+        return { ...c, palette: e?.palette, temPadrao: e !== null }
+      }),
+  )
+  return [...publicados, ...locais]
 }
 
 /**

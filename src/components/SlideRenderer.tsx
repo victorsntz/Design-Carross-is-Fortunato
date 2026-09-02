@@ -142,7 +142,7 @@ export function textYFor(slide: Slide): number {
 }
 
 /** Alinhamento do texto: o do slide vence o padrão do tipo. */
-export function alignFor(slide: Slide): 'left' | 'center' | undefined {
+export function alignFor(slide: Slide): 'left' | 'center' | 'right' | undefined {
   return slide.align
 }
 

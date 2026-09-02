@@ -30,7 +30,7 @@ interface BaseSlide {
   /** Espaço entre letras em em (-0.06–0.06). Sem valor = 0. */
   letterSpacing?: number
   /** Alinhamento do texto. Sem valor = o padrão do tipo. */
-  align?: 'left' | 'center'
+  align?: 'left' | 'center' | 'right'
   /**
    * Onde o texto se apoia dentro da caixa dele: 0 encosta no topo, 100 no
    * rodapé, 50 centraliza. Sem valor = o lugar que o desenho do tipo dá.

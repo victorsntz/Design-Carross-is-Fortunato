@@ -259,6 +259,60 @@ body {
   padding: 20px 0;
 }
 
+/* Criar cliente novo direto na Central */
+.central-novo {
+  display: flex;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.central-novo input {
+  flex: 1;
+  min-width: 0;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+}
+
+.central-novo input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.central-nota {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 10px 0 0;
+}
+
+/* O × que tira da lista um cliente criado aqui */
+.central-lista li {
+  position: relative;
+}
+
+.central-tirar {
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 8px;
+}
+
+.central-tirar:hover {
+  color: var(--text);
+}
+
 .central-sair {
   margin-top: 4px;
 }
