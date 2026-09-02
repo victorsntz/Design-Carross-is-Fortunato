@@ -412,7 +412,7 @@ body {
   padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .panel--project {
@@ -429,10 +429,29 @@ body {
   background: var(--card);
   border: 1px solid var(--border-soft);
   border-radius: 12px;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 15px;
+}
+
+/* O rótulo cola na barrinha que ele nomeia: assim o respiro maior fica
+   entre um ajuste e o outro, e não entre o nome e o controle dele. */
+.control-row + .slider-row,
+.control-row + .segmented {
+  margin-top: -7px;
+}
+
+/* Listas de botões (adicionar slide, trocar o tipo) são um bloco só:
+   o respiro grande fica em volta da lista, não entre cada item. */
+.btn--add + .btn--add {
+  margin-top: -8px;
+}
+
+/* Título e primeira linha do card também não precisam do respiro cheio */
+.card-title + .hint,
+.card-title + .control-row {
+  margin-top: -4px;
 }
 
 .card-title {
@@ -769,6 +788,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 2px 0;
 }
 
 .slider-row span {

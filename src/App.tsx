@@ -321,24 +321,24 @@ function TypoSliders({
     <>
       <div className="control-row">
         <span className="control-label">Alinhamento</span>
-        <div className="segmented">
-          {(
-            [
-              ['left', 'Esquerda'],
-              ['center', 'Centro'],
-              ['right', 'Direita'],
-            ] as const
-          ).map(([modo, rotulo]) => (
-            <button
-              key={modo}
-              type="button"
-              className={alinhamento === modo ? 'seg seg--active' : 'seg'}
-              onClick={() => onChange({ align: modo })}
-            >
-              {rotulo}
-            </button>
-          ))}
-        </div>
+      </div>
+      <div className="segmented segmented--full">
+        {(
+          [
+            ['left', 'Esquerda'],
+            ['center', 'Centro'],
+            ['right', 'Direita'],
+          ] as const
+        ).map(([modo, rotulo]) => (
+          <button
+            key={modo}
+            type="button"
+            className={alinhamento === modo ? 'seg seg--active' : 'seg'}
+            onClick={() => onChange({ align: modo })}
+          >
+            {rotulo}
+          </button>
+        ))}
       </div>
       {aceitaPosicaoDeTexto(slide.type) && (
         <>
